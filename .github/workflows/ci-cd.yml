@@ -143,16 +143,15 @@ jobs:
 
             sudo docker load --input /www/docker/latest/paybot.tar
 
-            if ! docker compose version >/dev/null 2>&1; then
+            if ! sudo docker compose version >/dev/null 2>&1; then
               echo "docker compose plugin not found"
               exit 1
             fi
 
-            cd /www
-            export COMPOSE_PROJECT_NAME=paybot
-            docker compose pull nginx evolution postgres
-            docker compose up -d --pull never
-            docker compose up -d --pull never --no-deps --force-recreate paybot nginx
+            # Root reads /www/.env (mode 600). The SSH user cannot.
+            sudo docker compose --project-directory /www -p paybot pull nginx evolution postgres
+            sudo docker compose --project-directory /www -p paybot up -d --pull never
+            sudo docker compose --project-directory /www -p paybot up -d --pull never --no-deps --force-recreate paybot nginx
             sudo docker image prune -f || true
             rm -rf /tmp/gha-paybot || true
             echo "Deploy completed"
