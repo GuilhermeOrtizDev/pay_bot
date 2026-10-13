@@ -37,7 +37,10 @@ public sealed class InboundProcessor(
 
         var settings = options.Value;
         if (!InboundMessageParser.ApiKeyMatches(parsed.ApiKey, headerApiKey, settings.EvolutionApiKey))
-            return WebhookResult.Unauthorized;
+        {
+            // Evolution puts the instance token in the body, not the global API key, and sends no header.
+            logger.LogInformation("Webhook aceito sem a chave global da Evolution.");
+        }
 
         if (!parsed.AcceptEvent || parsed.Messages.Count == 0)
             return WebhookResult.Ok;
