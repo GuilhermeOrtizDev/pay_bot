@@ -12,7 +12,8 @@ public static class SaoPauloClock
     public static DateTimeOffset AtNoon(DateOnly date)
     {
         var local = date.ToDateTime(new TimeOnly(12, 0));
-        return new DateTimeOffset(local, Zone.GetUtcOffset(local));
+        // timestamptz rejects a non-zero offset, so the instant is stored in UTC.
+        return new DateTimeOffset(local, Zone.GetUtcOffset(local)).ToUniversalTime();
     }
 
     private static TimeZoneInfo Resolve()

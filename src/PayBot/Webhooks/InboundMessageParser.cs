@@ -38,6 +38,7 @@ public static class BotEcho
         "Informe o periodo",
         "A partir de qual mes",
         "Mes invalido",
+        "Nao consegui registrar",
         "Numero de parcelas",
         "Valor invalido",
         "Numero de parcelas invalido",

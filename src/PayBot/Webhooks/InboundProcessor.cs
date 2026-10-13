@@ -109,6 +109,7 @@ public sealed class InboundProcessor(
         var reply = turn.Reply;
         var nextStep = turn.NextStep;
         var draft = turn.Draft;
+        var previousStep = session.Step;
         if (turn.Summary is not null)
         {
             var report = await summaries.BuildAsync(turn.Summary, cancellationToken);
@@ -186,12 +187,30 @@ public sealed class InboundProcessor(
             db.ChangeTracker.Clear();
             return;
         }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Falha ao gravar a mensagem {MessageId}.", message.MessageId);
+            db.ChangeTracker.Clear();
+            await evolution.SendAsync(FailureReply(previousStep), cancellationToken);
+            return;
+        }
 
         if (!string.IsNullOrWhiteSpace(reply))
             await evolution.SendAsync(reply, cancellationToken);
 
         logger.LogInformation("Mensagem {MessageId} levou o menu para {Step}.", message.MessageId, turn.NextStep);
     }
+
+    private static string FailureReply(MenuStep step) => step switch
+    {
+        MenuStep.AwaitingChargeMonth => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskChargeMonth,
+        MenuStep.AwaitingDateRange or MenuStep.AwaitingDeleteDateRange => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskPeriod,
+        MenuStep.AwaitingAmount or MenuStep.AwaitingIncomeAmount => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskAmount,
+        MenuStep.AwaitingExpenseDescription or MenuStep.AwaitingIncomeDescription => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskDescription,
+        MenuStep.AwaitingInstallments => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskInstallments,
+        MenuStep.AwaitingNewCardName => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskCardName,
+        _ => MenuTexts.SaveFailed
+    };
 
     private async Task AddExpenseAsync(PendingExpense expense, string messageId, DateTimeOffset now, CancellationToken cancellationToken)
     {

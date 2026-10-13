@@ -76,6 +76,7 @@ public static class MenuTexts
     public const string InvalidInstallments = "Numero de parcelas invalido. Ex: 10";
     public const string InvalidPeriod = "Periodo invalido. Ex: 10/05/2026 - 20/05/2026";
     public const string InvalidChargeMonth = "Mes invalido. Ex: 10/2026";
+    public const string SaveFailed = "Nao consegui registrar. Tente de novo.";
     public const string InvalidCardName = "Nome do cartao invalido.";
     public const string InvalidDescription = "Descricao invalida.";
     public const string InvalidDeleteId = "Id invalido.";
