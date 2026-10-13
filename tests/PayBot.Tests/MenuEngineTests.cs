@@ -48,8 +48,6 @@ public class MenuEngineTests
     [Theory]
     [InlineData("1", PaymentMethod.Pix, "Pix")]
     [InlineData("4", PaymentMethod.CashWithdrawal, "Retirada de caixa")]
-    [InlineData("5", PaymentMethod.Fixed, "Despesa Fixa")]
-    [InlineData("6", PaymentMethod.Other, "Outros")]
     public void Simple_expense_saves_the_amount(string option, PaymentMethod method, string label)
     {
         var chosen = Act(option, MenuStep.ExpenseMenu);
@@ -84,16 +82,43 @@ public class MenuEngineTests
         Assert.DoesNotContain("Inter", amount.Reply);
 
         var card = Act("1", amount.NextStep, amount.Draft, Cards());
-        var saved = Act("mercado", card.NextStep, card.Draft, Cards());
+        var described = Act("mercado", card.NextStep, card.Draft, Cards());
+        Assert.Equal(MenuStep.AwaitingChargeMonth, described.NextStep);
+
+        var saved = Act("11/2026", described.NextStep, described.Draft, Cards());
         Assert.Equal(NubankId, saved.Expense!.CardId);
         Assert.Equal(10, saved.Expense.Installments);
         Assert.Equal("mercado", saved.Expense.Description);
+        Assert.Equal(new DateOnly(2026, 11, 1), saved.Expense.ChargeMonth);
         Assert.False(saved.Expense.IsFixed);
         Assert.False(saved.Expense.CreateCard);
         Assert.Equal(1200m, saved.Expense.Amount);
         Assert.Contains("em 10x", saved.Reply);
+        Assert.Contains("a partir de 11/2026", saved.Reply);
         Assert.Contains("Nubank", saved.Reply);
         Assert.Contains("mercado", saved.Reply);
+    }
+
+    [Theory]
+    [InlineData("5", PaymentMethod.Fixed, "Despesa Fixa")]
+    [InlineData("6", PaymentMethod.Other, "Outros")]
+    public void Fixed_and_other_expenses_start_on_the_chosen_month(string option, PaymentMethod method, string label)
+    {
+        var chosen = Act(option, MenuStep.ExpenseMenu);
+        var amount = Act("80", chosen.NextStep, chosen.Draft);
+        var described = Act("aluguel", amount.NextStep, amount.Draft);
+        Assert.Equal(MenuStep.AwaitingChargeMonth, described.NextStep);
+
+        var invalid = Act("2026", described.NextStep, described.Draft);
+        Assert.Equal(MenuStep.AwaitingChargeMonth, invalid.NextStep);
+        Assert.Null(invalid.Expense);
+
+        var saved = Act("01/2027", invalid.NextStep, invalid.Draft);
+        Assert.Equal(method, saved.Expense!.Method);
+        Assert.Equal(new DateOnly(2027, 1, 1), saved.Expense.ChargeMonth);
+        Assert.Equal("aluguel", saved.Expense.Description);
+        Assert.Contains(label, saved.Reply);
+        Assert.Contains("a partir de 01/2027", saved.Reply);
     }
 
     [Fact]
@@ -195,25 +220,38 @@ public class MenuEngineTests
     public void Summary_options_cover_month_year_total_and_custom_range()
     {
         var month = Act("1", MenuStep.SummaryMenu);
-        Assert.Equal(new DateOnly(2026, 10, 1), month.Summary!.From);
-        Assert.Equal(new DateOnly(2026, 10, 31), month.Summary.To);
-        Assert.Equal(MenuStep.SummaryMenu, month.NextStep);
+        Assert.Equal(MenuStep.AwaitingSummaryOutput, month.NextStep);
+        Assert.Contains("1 - Gerar em PDF", month.Reply);
+        Assert.Contains("2 - Gerar em texto", month.Reply);
+        Assert.Equal(new DateOnly(2026, 10, 1), month.Draft.SummaryFrom);
+        Assert.Equal(new DateOnly(2026, 10, 31), month.Draft.SummaryTo);
+
+        var asText = Act("2", month.NextStep, month.Draft);
+        Assert.False(asText.AsPdf);
+        Assert.Equal(new DateOnly(2026, 10, 1), asText.Summary!.From);
+        Assert.Equal(new DateOnly(2026, 10, 31), asText.Summary.To);
+        Assert.Equal(MenuStep.SummaryMenu, asText.NextStep);
+
+        var asPdf = Act("1", month.NextStep, month.Draft);
+        Assert.True(asPdf.AsPdf);
+        Assert.Equal(month.Draft.SummaryTitle, asPdf.Summary!.Title);
 
         var year = Act("2", MenuStep.SummaryMenu);
-        Assert.Equal(new DateOnly(2026, 1, 1), year.Summary!.From);
-        Assert.Equal(new DateOnly(2026, 12, 31), year.Summary.To);
+        Assert.Equal(new DateOnly(2026, 1, 1), year.Draft.SummaryFrom);
+        Assert.Equal(new DateOnly(2026, 12, 31), year.Draft.SummaryTo);
 
         var total = Act("3", MenuStep.SummaryMenu);
-        Assert.Null(total.Summary!.From);
-        Assert.Null(total.Summary.To);
-        Assert.Equal("Resumo total", total.Summary.Title);
+        Assert.Null(total.Draft.SummaryFrom);
+        Assert.Null(total.Draft.SummaryTo);
+        Assert.Equal("Resumo total", total.Draft.SummaryTitle);
 
         var ask = Act("4", MenuStep.SummaryMenu);
         Assert.Equal(MenuStep.AwaitingDateRange, ask.NextStep);
 
         var range = Act("10/05/2026 - 20/05/2026", ask.NextStep);
-        Assert.Equal(new DateOnly(2026, 5, 10), range.Summary!.From);
-        Assert.Equal(new DateOnly(2026, 5, 20), range.Summary.To);
+        Assert.Equal(MenuStep.AwaitingSummaryOutput, range.NextStep);
+        Assert.Equal(new DateOnly(2026, 5, 10), range.Draft.SummaryFrom);
+        Assert.Equal(new DateOnly(2026, 5, 20), range.Draft.SummaryTo);
 
         var invalid = Act("ontem", MenuStep.AwaitingDateRange);
         Assert.Equal(MenuStep.AwaitingDateRange, invalid.NextStep);

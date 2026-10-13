@@ -10,6 +10,11 @@ public sealed class SessionDraft
     public string? CardName { get; set; }
     public bool CreateCard { get; set; }
     public List<Guid> DeleteIds { get; set; } = [];
+    public DateOnly? SummaryFrom { get; set; }
+    public DateOnly? SummaryTo { get; set; }
+    public string? SummaryTitle { get; set; }
+    public string? Description { get; set; }
+    public DateOnly? ChargeMonth { get; set; }
 
     public SessionDraft Clone() => new()
     {
@@ -20,6 +25,11 @@ public sealed class SessionDraft
         CardId = CardId,
         CardName = CardName,
         CreateCard = CreateCard,
-        DeleteIds = (DeleteIds ?? []).ToList()
+        DeleteIds = (DeleteIds ?? []).ToList(),
+        SummaryFrom = SummaryFrom,
+        SummaryTo = SummaryTo,
+        SummaryTitle = SummaryTitle,
+        Description = Description,
+        ChargeMonth = ChargeMonth
     };
 }

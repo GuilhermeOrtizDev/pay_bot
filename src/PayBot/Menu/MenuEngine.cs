@@ -29,9 +29,11 @@ public static class MenuEngine
             MenuStep.AwaitingCardChoice => OnCardChoice(text, draft, cards),
             MenuStep.AwaitingNewCardName => OnNewCard(text, draft, cards),
             MenuStep.AwaitingExpenseDescription => OnExpenseDescription(text, draft),
+            MenuStep.AwaitingChargeMonth => OnChargeMonth(text, draft),
             MenuStep.AwaitingIncomeAmount => OnIncomeAmount(text, draft),
             MenuStep.AwaitingIncomeDescription => OnIncomeDescription(text, draft),
             MenuStep.SummaryMenu => OnSummary(text, today),
+            MenuStep.AwaitingSummaryOutput => OnSummaryOutput(text, draft),
             MenuStep.AwaitingDateRange => OnDateRange(text),
             MenuStep.RemoveMenu => OnRemove(text),
             MenuStep.AwaitingDeleteDateRange => OnDeleteDateRange(text),
@@ -187,7 +189,36 @@ public static class MenuEngine
         if (description.Length is 0 or > 200)
             return Stay(MenuStep.AwaitingExpenseDescription, draft, MenuTexts.InvalidDescription);
 
-        return FinishExpense(draft, description);
+        draft.Description = description;
+        if (NeedsChargeMonth(draft.Method))
+            return Stay(MenuStep.AwaitingChargeMonth, draft, MenuTexts.AskChargeMonth);
+
+        return FinishExpense(draft);
+    }
+
+    private static MenuTurn OnChargeMonth(string text, SessionDraft draft)
+    {
+        if (draft.Method is null || draft.Amount is null || string.IsNullOrWhiteSpace(draft.Description))
+            return OpenMain();
+        if (!TryParseMonth(text, out var month))
+            return Stay(MenuStep.AwaitingChargeMonth, draft, MenuTexts.InvalidChargeMonth);
+
+        draft.ChargeMonth = month;
+        return FinishExpense(draft);
+    }
+
+    private static bool NeedsChargeMonth(PaymentMethod? method) =>
+        method is PaymentMethod.CreditCard or PaymentMethod.Fixed or PaymentMethod.Other;
+
+    private static bool TryParseMonth(string text, out DateOnly month)
+    {
+        month = default;
+        var formats = new[] { "MM/yyyy", "M/yyyy" };
+        if (!DateOnly.TryParseExact(text.Trim(), formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+            return false;
+
+        month = new DateOnly(parsed.Year, parsed.Month, 1);
+        return true;
     }
 
     private static MenuTurn OnIncomeAmount(string text, SessionDraft draft)
@@ -217,7 +248,7 @@ public static class MenuEngine
     {
         "1" => Period(StartOfMonth(today), EndOfMonth(today)),
         "2" => Period(new DateOnly(today.Year, 1, 1), new DateOnly(today.Year, 12, 31)),
-        "3" => new MenuTurn("", MenuStep.SummaryMenu, new SessionDraft(), null, null, new SummaryQuery(null, null, "Resumo total")),
+        "3" => AskFormat(new SummaryQuery(null, null, "Resumo total")),
         "4" => Stay(MenuStep.AwaitingDateRange, new SessionDraft(), MenuTexts.AskPeriod),
         "5" => Stay(MenuStep.RemoveMenu, new SessionDraft(), MenuTexts.Remove),
         _ => Stay(MenuStep.SummaryMenu, new SessionDraft(), MenuTexts.Summary)
@@ -266,10 +297,42 @@ public static class MenuEngine
         return Period(from, to);
     }
 
+    private static MenuTurn OnSummaryOutput(string text, SessionDraft draft)
+    {
+        var query = QueryFrom(draft);
+        if (query is null)
+            return OpenMain();
+
+        return text switch
+        {
+            "1" => new MenuTurn("", MenuStep.SummaryMenu, new SessionDraft(), null, null, query, AsPdf: true),
+            "2" => new MenuTurn("", MenuStep.SummaryMenu, new SessionDraft(), null, null, query),
+            _ => Stay(MenuStep.AwaitingSummaryOutput, draft, MenuTexts.SummaryOutput)
+        };
+    }
+
     private static MenuTurn Period(DateOnly from, DateOnly to)
     {
         var title = $"Resumo de {MenuTexts.FormatDate(from)} a {MenuTexts.FormatDate(to)}";
-        return new MenuTurn("", MenuStep.SummaryMenu, new SessionDraft(), null, null, new SummaryQuery(from, to, title));
+        return AskFormat(new SummaryQuery(from, to, title));
+    }
+
+    private static MenuTurn AskFormat(SummaryQuery query)
+    {
+        var draft = new SessionDraft
+        {
+            SummaryFrom = query.From,
+            SummaryTo = query.To,
+            SummaryTitle = query.Title
+        };
+        return Stay(MenuStep.AwaitingSummaryOutput, draft, MenuTexts.SummaryOutput);
+    }
+
+    private static SummaryQuery? QueryFrom(SessionDraft draft)
+    {
+        if (string.IsNullOrWhiteSpace(draft.SummaryTitle))
+            return null;
+        return new SummaryQuery(draft.SummaryFrom, draft.SummaryTo, draft.SummaryTitle);
     }
 
     private static MenuTurn CardPrompt(SessionDraft draft, IReadOnlyList<KnownCard> cards)
@@ -287,10 +350,11 @@ public static class MenuEngine
         return Stay(MenuStep.AwaitingExpenseDescription, draft, MenuTexts.AskDescription);
     }
 
-    private static MenuTurn FinishExpense(SessionDraft draft, string description)
+    private static MenuTurn FinishExpense(SessionDraft draft)
     {
         var method = draft.Method!.Value;
         var amount = draft.Amount!.Value;
+        var description = draft.Description!.Trim();
         var installments = method == PaymentMethod.CreditCard && draft.Billing == CardBilling.Installments
             ? draft.Installments
             : null;
@@ -303,10 +367,14 @@ public static class MenuEngine
             draft.CardName,
             draft.CreateCard,
             description,
-            isFixed);
+            isFixed,
+            draft.ChargeMonth);
         var cardPart = string.IsNullOrWhiteSpace(draft.CardName) ? "" : $" {draft.CardName.Trim()}";
         var billing = BillingLabel(method, draft.Billing, installments);
-        var reply = $"Gasto registrado: {MenuTexts.MethodLabel(method)}{cardPart} {MenuTexts.Money(amount)}{billing} - {description}\n\n{MenuTexts.Main}";
+        var start = draft.ChargeMonth is DateOnly month
+            ? $" a partir de {month.ToString("MM/yyyy", CultureInfo.InvariantCulture)}"
+            : "";
+        var reply = $"Gasto registrado: {MenuTexts.MethodLabel(method)}{cardPart} {MenuTexts.Money(amount)}{billing}{start} - {description}\n\n{MenuTexts.Main}";
         return new MenuTurn(reply, MenuStep.Main, new SessionDraft(), expense, null, null);
     }
 

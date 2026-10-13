@@ -135,6 +135,20 @@ public class SummaryTests
         Card = card,
         WhatsAppMessageId = Guid.NewGuid().ToString("N")
     };
+
+    [Fact]
+    public void Pdf_contains_the_summary_title()
+    {
+        var report = SummaryAggregator.Build(
+            "Resumo total",
+            [new SummaryRow(new DateOnly(2026, 10, 2), Direction.Income, 10, null, "salario", null, null)]);
+        var pdf = SummaryPdf.Render(report);
+        var text = System.Text.Encoding.ASCII.GetString(pdf);
+
+        Assert.StartsWith("%PDF", text);
+        Assert.Contains("Resumo total", text);
+        Assert.Contains("salario", text);
+    }
 }
 
 file static class TestDb

@@ -30,6 +30,36 @@ public sealed class EvolutionClient(
             logger.LogWarning("Evolution recusou o envio com status {Status}.", status);
     }
 
+    public async Task<bool> SendDocumentAsync(
+        byte[] content,
+        string fileName,
+        string caption,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(_options.GroupJid) || string.IsNullOrWhiteSpace(_options.EvolutionApiKey))
+        {
+            logger.LogWarning("PDF ignorado: grupo ou chave da Evolution ausente.");
+            return false;
+        }
+
+        var status = await PostAsync(
+            $"/message/sendMedia/{Uri.EscapeDataString(_options.EvolutionInstance)}",
+            new
+            {
+                number = _options.GroupJid.Trim(),
+                mediatype = "document",
+                mimetype = "application/pdf",
+                caption,
+                fileName,
+                media = Convert.ToBase64String(content)
+            },
+            cancellationToken);
+
+        if (!IsSuccess(status))
+            logger.LogWarning("Evolution recusou o PDF com status {Status}.", status);
+        return IsSuccess(status);
+    }
+
     public async Task<bool> EnsureWebhookAsync(CancellationToken cancellationToken)
     {
         var path = $"/webhook/set/{Uri.EscapeDataString(_options.EvolutionInstance)}";
