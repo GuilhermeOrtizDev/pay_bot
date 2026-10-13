@@ -15,6 +15,6 @@ RUN RID=linux-x64; if [ "$TARGETARCH" = "arm64" ]; then RID=linux-arm64; fi; \
 
 FROM base AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
+COPY --from=build /app/publish .
 ENV ASPNETCORE_URLS=http://+:8080
 ENTRYPOINT ["dotnet", "PayBot.dll"]
