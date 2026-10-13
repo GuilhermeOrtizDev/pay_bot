@@ -1,0 +1,78 @@
+using System.Globalization;
+using System.Text;
+using PayBot.Domain;
+
+namespace PayBot.Menu;
+
+public static class MenuTexts
+{
+    public static readonly CultureInfo PtBr = CultureInfo.GetCultureInfo("pt-BR");
+
+    public const string Main = """
+        1 - Registrar gasto
+        2 - Registrar entrada
+        3 - Resumo
+        """;
+
+    public const string Expense = """
+        Registrar gasto
+        0 - Voltar Menu Inicial
+        1 - Pix
+        2 - Cartao credito
+        3 - Cartao debito
+        4 - Retirada de caixa
+        5 - Despesa Fixa
+        6 - Outros
+        """;
+
+    public const string Summary = """
+        Resumo
+        0 - Voltar Menu Inicial
+        1 - Resumo do mes
+        2 - Resumo do ano
+        3 - Resumo total
+        4 - Filtrar data, ex: 10/05/2026 - 20/05/2026
+        """;
+
+    public const string AskAmount = "Informe o valor";
+    public const string AskInstallments = "Numero de parcelas";
+    public const string AskCardName = "Informe o nome do cartao";
+    public const string AskDescription = "Informe a descricao";
+    public const string AskPeriod = "Informe o periodo. Ex: 10/05/2026 - 20/05/2026";
+    public const string InvalidAmount = "Valor invalido. Ex: 32,50";
+    public const string InvalidInstallments = "Numero de parcelas invalido. Ex: 10";
+    public const string InvalidPeriod = "Periodo invalido. Ex: 10/05/2026 - 20/05/2026";
+    public const string InvalidCardName = "Nome do cartao invalido.";
+    public const string InvalidDescription = "Descricao invalida.";
+
+    public static string MethodLabel(PaymentMethod method) => method switch
+    {
+        PaymentMethod.Pix => "Pix",
+        PaymentMethod.CreditCard => "Cartao credito",
+        PaymentMethod.DebitCard => "Cartao debito",
+        PaymentMethod.CashWithdrawal => "Retirada de caixa",
+        PaymentMethod.Fixed => "Despesa Fixa",
+        PaymentMethod.Other => "Outros",
+        _ => "Outros"
+    };
+
+    public static string Money(decimal amount)
+    {
+        var formatted = Math.Abs(amount).ToString("N2", PtBr);
+        return amount < 0 ? $"-R$ {formatted}" : $"R$ {formatted}";
+    }
+
+    public static string CardList(IReadOnlyList<KnownCard> cards)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("Escolha o cartao");
+        builder.AppendLine("0 - Voltar Menu Inicial");
+        for (var i = 0; i < cards.Count; i++)
+            builder.AppendLine($"{i + 1} - {cards[i].Name}");
+        builder.Append("99 - Registrar novo cartao");
+        return builder.ToString();
+    }
+
+    public static string FormatDate(DateOnly date) =>
+        date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+}

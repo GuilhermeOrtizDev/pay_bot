@@ -1,0 +1,9 @@
+.env
+.tools/
+backups/*.sql
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+.idea/

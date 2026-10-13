@@ -1,0 +1,186 @@
+# CI/CD — PayBot (build linux/arm64 + deploy via SSH)
+# SDK compiles natively on the GitHub amd64 runner (no QEMU); the image is linux/arm64.
+#
+# Required GitHub secrets (repo or org):
+#   SSH_HOST          — EC2 hostname or IP
+#   SSH_USER          — SSH username
+#   SSH_PRIVATE_KEY   — private key for SSH/SCP
+#   SSH_PORT          — optional (default 22)
+#
+# The server .env lives at /www/paybot/.env and is not uploaded by this workflow.
+# Trigger: push to main, or workflow_dispatch.
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: paybot-prod
+  cancel-in-progress: false
+
+env:
+  DOTNET_VERSION: "10.0.x"
+  BUILD_CONFIGURATION: Release
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Test
+        run: dotnet test PayBot.slnx -c ${{ env.BUILD_CONFIGURATION }}
+
+  build:
+    name: Build paybot
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (linux/arm64)
+        uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/arm64
+          tags: paybot:latest
+          load: true
+          cache-from: type=gha,scope=paybot
+          cache-to: type=gha,mode=max,scope=paybot
+
+      - name: Save image tar
+        run: docker save -o ${{ runner.temp }}/paybot.tar paybot:latest
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: paybot
+          path: ${{ runner.temp }}/paybot.tar
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy:
+    name: Deploy to EC2
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download image
+        uses: actions/download-artifact@v4
+        with:
+          name: paybot
+          path: deploy-stage
+
+      - name: Stage compose files
+        run: |
+          set -euo pipefail
+          mkdir -p deploy-stage/nginx deploy-stage/docker/postgres/init
+          cp docker-compose.yml deploy-stage/docker-compose.yml
+          cp nginx/default.conf deploy-stage/nginx/default.conf
+          cp docker/postgres/init/01-paybot.sql deploy-stage/docker/postgres/init/01-paybot.sql
+          test -f deploy-stage/paybot.tar
+
+      - name: SCP to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          source: deploy-stage
+          target: /tmp/gha-paybot
+          strip_components: 1
+          overwrite: true
+
+      - name: Load image and recreate PayBot
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            set -euo pipefail
+
+            if [ ! -f /tmp/gha-paybot/paybot.tar ]; then
+              echo "Missing staged image: paybot.tar"
+              exit 1
+            fi
+
+            sudo mkdir -p /www/paybot/nginx /www/paybot/docker/postgres/init /www/paybot/bkp
+            if [ -f /www/paybot/paybot.tar ]; then
+              sudo cp /www/paybot/paybot.tar /www/paybot/bkp/paybot.tar
+            fi
+
+            sudo cp /tmp/gha-paybot/paybot.tar /www/paybot/paybot.tar
+            sudo cp /tmp/gha-paybot/docker-compose.yml /www/paybot/docker-compose.yml
+            sudo cp /tmp/gha-paybot/nginx/default.conf /www/paybot/nginx/default.conf
+            sudo cp /tmp/gha-paybot/docker/postgres/init/01-paybot.sql /www/paybot/docker/postgres/init/01-paybot.sql
+
+            if [ ! -f /www/paybot/.env ]; then
+              echo "Missing /www/paybot/.env. Create it on the server before deploying."
+              exit 1
+            fi
+
+            sudo docker load --input /www/paybot/paybot.tar
+
+            if ! docker compose version >/dev/null 2>&1; then
+              echo "docker compose plugin not found"
+              exit 1
+            fi
+
+            cd /www/paybot
+            export COMPOSE_PROJECT_NAME=paybot
+            docker compose pull nginx evolution postgres
+            docker compose up -d --pull never
+            docker compose up -d --pull never --no-deps --force-recreate paybot nginx
+            sudo docker image prune -f || true
+            rm -rf /tmp/gha-paybot || true
+            echo "Deploy completed"
+
+  cleanup-artifacts:
+    name: Delete artifacts
+    needs: [build, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Delete artifacts from this run
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { data } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner,
+              repo,
+              run_id: context.runId,
+              per_page: 100,
+            });
+            for (const artifact of data.artifacts || []) {
+              if (!artifact || !artifact.id) continue;
+              await github.rest.actions.deleteArtifact({
+                owner,
+                repo,
+                artifact_id: artifact.id,
+              });
+            }

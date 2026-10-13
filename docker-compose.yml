@@ -1,0 +1,90 @@
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - evolution
+
+  evolution:
+    image: evoapicloud/evolution-api:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: America/Sao_Paulo
+      SERVER_URL: ${SERVER_URL:-http://localhost}
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+      LANGUAGE: pt-BR
+      DEL_INSTANCE: "false"
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-evolution}?schema=public
+      DATABASE_CONNECTION_CLIENT_NAME: evolution_paybot
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "false"
+      DATABASE_SAVE_MESSAGE_UPDATE: "false"
+      DATABASE_SAVE_DATA_CONTACTS: "false"
+      DATABASE_SAVE_DATA_CHATS: "false"
+      DATABASE_SAVE_DATA_LABELS: "false"
+      DATABASE_SAVE_DATA_HISTORIC: "false"
+      CACHE_REDIS_ENABLED: "false"
+      CACHE_LOCAL_ENABLED: "true"
+      WEBHOOK_GLOBAL_ENABLED: "true"
+      WEBHOOK_GLOBAL_URL: http://paybot:8080/webhooks/evolution
+      WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS: "false"
+      WEBHOOK_EVENTS_MESSAGES_UPSERT: "true"
+    volumes:
+      - evolution_instances:/evolution/instances
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8080"
+
+  paybot:
+    image: paybot:latest
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: America/Sao_Paulo
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__PayBot: Host=postgres;Port=5432;Database=paybot;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      PayBot__EvolutionBaseUrl: http://evolution:8080
+      PayBot__EvolutionApiKey: ${EVOLUTION_API_KEY}
+      PayBot__EvolutionInstance: ${EVOLUTION_INSTANCE:-paybot}
+      PayBot__WebhookUrl: http://paybot:8080/webhooks/evolution
+      PayBot__GroupJid: ${GROUP_JID:-}
+      PayBot__OwnerNumber: ${OWNER_NUMBER:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8080"
+
+  postgres:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      TZ: America/Sao_Paulo
+      POSTGRES_DB: ${POSTGRES_DB:-evolution}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-evolution}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres_data:
+  evolution_instances:

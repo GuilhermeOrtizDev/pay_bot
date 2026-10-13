@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PayBot/PayBot.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PayBot.Tests/PayBot.Tests.csproj" />
+  </Folder>
+</Solution>
