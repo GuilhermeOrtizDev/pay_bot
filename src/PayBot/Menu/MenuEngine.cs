@@ -22,14 +22,20 @@ public static class MenuEngine
         {
             MenuStep.Main => OnMain(text),
             MenuStep.ExpenseMenu => OnExpense(text, draft),
+            MenuStep.AwaitingCreditCharge => OnCreditCharge(text, draft),
+            MenuStep.AwaitingDebitCharge => OnDebitCharge(text, draft),
             MenuStep.AwaitingAmount => OnAmount(text, draft, cards),
-            MenuStep.AwaitingInstallments => OnInstallments(text, draft, cards),
+            MenuStep.AwaitingInstallments => OnInstallments(text, draft),
             MenuStep.AwaitingCardChoice => OnCardChoice(text, draft, cards),
             MenuStep.AwaitingNewCardName => OnNewCard(text, draft, cards),
+            MenuStep.AwaitingExpenseDescription => OnExpenseDescription(text, draft),
             MenuStep.AwaitingIncomeAmount => OnIncomeAmount(text, draft),
             MenuStep.AwaitingIncomeDescription => OnIncomeDescription(text, draft),
             MenuStep.SummaryMenu => OnSummary(text, today),
             MenuStep.AwaitingDateRange => OnDateRange(text),
+            MenuStep.RemoveMenu => OnRemove(text),
+            MenuStep.AwaitingDeleteDateRange => OnDeleteDateRange(text),
+            MenuStep.AwaitingDeleteChoice => OnDeleteChoice(text, draft),
             _ => OpenMain()
         };
     }
@@ -61,6 +67,56 @@ public static class MenuEngine
         draft.Method = method;
         draft.Amount = null;
         draft.Installments = null;
+        draft.Billing = null;
+        draft.CardId = null;
+        draft.CardName = null;
+        draft.CreateCard = false;
+        if (method == PaymentMethod.CreditCard)
+            return Stay(MenuStep.AwaitingCreditCharge, draft, MenuTexts.CreditCharge);
+        if (method == PaymentMethod.DebitCard)
+            return Stay(MenuStep.AwaitingDebitCharge, draft, MenuTexts.DebitCharge);
+
+        return Stay(MenuStep.AwaitingAmount, draft, MenuTexts.AskAmount);
+    }
+
+    private static MenuTurn OnCreditCharge(string text, SessionDraft draft)
+    {
+        if (draft.Method != PaymentMethod.CreditCard)
+            return OpenMain();
+
+        var billing = text switch
+        {
+            "1" => CardBilling.Installments,
+            "2" => CardBilling.InFull,
+            "3" => CardBilling.Fixed,
+            _ => (CardBilling?)null
+        };
+        if (billing is null)
+            return Stay(MenuStep.AwaitingCreditCharge, draft, MenuTexts.CreditCharge);
+
+        draft.Billing = billing;
+        draft.Installments = null;
+        if (billing == CardBilling.Installments)
+            return Stay(MenuStep.AwaitingInstallments, draft, MenuTexts.AskInstallments);
+
+        return Stay(MenuStep.AwaitingAmount, draft, MenuTexts.AskAmount);
+    }
+
+    private static MenuTurn OnDebitCharge(string text, SessionDraft draft)
+    {
+        if (draft.Method != PaymentMethod.DebitCard)
+            return OpenMain();
+
+        var billing = text switch
+        {
+            "1" => CardBilling.InFull,
+            "2" => CardBilling.Fixed,
+            _ => (CardBilling?)null
+        };
+        if (billing is null)
+            return Stay(MenuStep.AwaitingDebitCharge, draft, MenuTexts.DebitCharge);
+
+        draft.Billing = billing;
         return Stay(MenuStep.AwaitingAmount, draft, MenuTexts.AskAmount);
     }
 
@@ -72,23 +128,21 @@ public static class MenuEngine
             return Stay(MenuStep.AwaitingAmount, draft, MenuTexts.InvalidAmount);
 
         draft.Amount = amount;
-        if (draft.Method == PaymentMethod.CreditCard)
-            return Stay(MenuStep.AwaitingInstallments, draft, MenuTexts.AskInstallments);
-        if (draft.Method == PaymentMethod.DebitCard)
+        if (draft.Method is PaymentMethod.CreditCard or PaymentMethod.DebitCard)
             return CardPrompt(draft, cards);
 
-        return FinishExpense(draft, null, null, false);
+        return Stay(MenuStep.AwaitingExpenseDescription, draft, MenuTexts.AskDescription);
     }
 
-    private static MenuTurn OnInstallments(string text, SessionDraft draft, IReadOnlyList<KnownCard> cards)
+    private static MenuTurn OnInstallments(string text, SessionDraft draft)
     {
-        if (draft.Method != PaymentMethod.CreditCard || draft.Amount is null)
+        if (draft.Method != PaymentMethod.CreditCard || draft.Billing != CardBilling.Installments)
             return OpenMain();
         if (!int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var count) || count is < 1 or > 480)
             return Stay(MenuStep.AwaitingInstallments, draft, MenuTexts.InvalidInstallments);
 
         draft.Installments = count;
-        return CardPrompt(draft, cards);
+        return Stay(MenuStep.AwaitingAmount, draft, MenuTexts.AskAmount);
     }
 
     private static MenuTurn OnCardChoice(string text, SessionDraft draft, IReadOnlyList<KnownCard> cards)
@@ -100,7 +154,7 @@ public static class MenuEngine
         if (int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var index) && index >= 1 && index <= list.Count)
         {
             var card = list[index - 1];
-            return FinishExpense(draft, card.Id, card.Name, false);
+            return RememberCard(draft, card.Id, card.Name, false);
         }
 
         return Stay(MenuStep.AwaitingCardChoice, draft, MenuTexts.CardList(list));
@@ -117,9 +171,23 @@ public static class MenuEngine
 
         var existing = list.FirstOrDefault(card => string.Equals(card.Name, name, StringComparison.OrdinalIgnoreCase));
         if (existing is not null)
-            return FinishExpense(draft, existing.Id, existing.Name, false);
+            return RememberCard(draft, existing.Id, existing.Name, false);
 
-        return FinishExpense(draft, null, name, true);
+        return RememberCard(draft, null, name, true);
+    }
+
+    private static MenuTurn OnExpenseDescription(string text, SessionDraft draft)
+    {
+        if (draft.Method is null || draft.Amount is null)
+            return OpenMain();
+        if (draft.Method is PaymentMethod.CreditCard or PaymentMethod.DebitCard && string.IsNullOrWhiteSpace(draft.CardName))
+            return OpenMain();
+
+        var description = text.Trim();
+        if (description.Length is 0 or > 200)
+            return Stay(MenuStep.AwaitingExpenseDescription, draft, MenuTexts.InvalidDescription);
+
+        return FinishExpense(draft, description);
     }
 
     private static MenuTurn OnIncomeAmount(string text, SessionDraft draft)
@@ -151,8 +219,44 @@ public static class MenuEngine
         "2" => Period(new DateOnly(today.Year, 1, 1), new DateOnly(today.Year, 12, 31)),
         "3" => new MenuTurn("", MenuStep.SummaryMenu, new SessionDraft(), null, null, new SummaryQuery(null, null, "Resumo total")),
         "4" => Stay(MenuStep.AwaitingDateRange, new SessionDraft(), MenuTexts.AskPeriod),
+        "5" => Stay(MenuStep.RemoveMenu, new SessionDraft(), MenuTexts.Remove),
         _ => Stay(MenuStep.SummaryMenu, new SessionDraft(), MenuTexts.Summary)
     };
+
+    private static MenuTurn OnRemove(string text) => text switch
+    {
+        "1" => new MenuTurn("", MenuStep.AwaitingDeleteChoice, new SessionDraft(), null, null, null, new DeleteListRequest(null, null, 10)),
+        "2" => Stay(MenuStep.AwaitingDeleteDateRange, new SessionDraft(), MenuTexts.AskPeriod),
+        _ => Stay(MenuStep.RemoveMenu, new SessionDraft(), MenuTexts.Remove)
+    };
+
+    private static MenuTurn OnDeleteDateRange(string text)
+    {
+        if (!DateRangeParser.TryParse(text, out var from, out var to))
+            return Stay(MenuStep.AwaitingDeleteDateRange, new SessionDraft(), MenuTexts.InvalidPeriod);
+
+        return new MenuTurn(
+            "",
+            MenuStep.AwaitingDeleteChoice,
+            new SessionDraft(),
+            null,
+            null,
+            null,
+            new DeleteListRequest(from, to, 30));
+    }
+
+    private static MenuTurn OnDeleteChoice(string text, SessionDraft draft)
+    {
+        var ids = draft.DeleteIds ?? [];
+        if (int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var index)
+            && index >= 1
+            && index <= ids.Count)
+        {
+            return new MenuTurn("", MenuStep.RemoveMenu, new SessionDraft(), null, null, null, null, ids[index - 1]);
+        }
+
+        return Stay(MenuStep.AwaitingDeleteChoice, draft, MenuTexts.InvalidDeleteId);
+    }
 
     private static MenuTurn OnDateRange(string text)
     {
@@ -175,16 +279,46 @@ public static class MenuEngine
         return Stay(MenuStep.AwaitingCardChoice, draft, MenuTexts.CardList(list));
     }
 
-    private static MenuTurn FinishExpense(SessionDraft draft, Guid? cardId, string? cardName, bool createCard)
+    private static MenuTurn RememberCard(SessionDraft draft, Guid? cardId, string? cardName, bool createCard)
+    {
+        draft.CardId = cardId;
+        draft.CardName = cardName;
+        draft.CreateCard = createCard;
+        return Stay(MenuStep.AwaitingExpenseDescription, draft, MenuTexts.AskDescription);
+    }
+
+    private static MenuTurn FinishExpense(SessionDraft draft, string description)
     {
         var method = draft.Method!.Value;
         var amount = draft.Amount!.Value;
-        var installments = method == PaymentMethod.CreditCard ? draft.Installments : null;
-        var expense = new PendingExpense(method, amount, installments, cardId, cardName, createCard);
-        var cardPart = string.IsNullOrWhiteSpace(cardName) ? "" : $" {cardName.Trim()}";
-        var parcel = installments is > 0 ? $" em {installments}x" : "";
-        var reply = $"Gasto registrado: {MenuTexts.MethodLabel(method)}{cardPart} {MenuTexts.Money(amount)}{parcel}\n\n{MenuTexts.Main}";
+        var installments = method == PaymentMethod.CreditCard && draft.Billing == CardBilling.Installments
+            ? draft.Installments
+            : null;
+        var isFixed = draft.Billing == CardBilling.Fixed;
+        var expense = new PendingExpense(
+            method,
+            amount,
+            installments,
+            draft.CardId,
+            draft.CardName,
+            draft.CreateCard,
+            description,
+            isFixed);
+        var cardPart = string.IsNullOrWhiteSpace(draft.CardName) ? "" : $" {draft.CardName.Trim()}";
+        var billing = BillingLabel(method, draft.Billing, installments);
+        var reply = $"Gasto registrado: {MenuTexts.MethodLabel(method)}{cardPart} {MenuTexts.Money(amount)}{billing} - {description}\n\n{MenuTexts.Main}";
         return new MenuTurn(reply, MenuStep.Main, new SessionDraft(), expense, null, null);
+    }
+
+    private static string BillingLabel(PaymentMethod method, CardBilling? billing, int? installments)
+    {
+        if (method == PaymentMethod.CreditCard && billing == CardBilling.Installments && installments is > 0)
+            return $" em {installments}x";
+        if (billing == CardBilling.InFull)
+            return " a vista";
+        if (billing == CardBilling.Fixed)
+            return " fixo";
+        return "";
     }
 
     private static bool TryCardContext(SessionDraft draft, IReadOnlyList<KnownCard> cards, out IReadOnlyList<KnownCard> list)

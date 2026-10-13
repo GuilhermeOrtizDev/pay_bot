@@ -39,7 +39,15 @@ public static class BotEcho
         "Numero de parcelas invalido",
         "Periodo invalido",
         "Nome do cartao invalido",
-        "Descricao invalida"
+        "Descricao invalida",
+        "Cartao credito",
+        "Cartao debito",
+        "Remover",
+        "Selecione o id",
+        "Registro removido:",
+        "Nenhum registro",
+        "Id invalido",
+        "Registro nao encontrado"
     ];
 
     public static bool IsEcho(string text)

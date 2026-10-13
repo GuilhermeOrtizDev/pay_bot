@@ -53,35 +53,79 @@ public class MenuEngineTests
     public void Simple_expense_saves_the_amount(string option, PaymentMethod method, string label)
     {
         var chosen = Act(option, MenuStep.ExpenseMenu);
-        var saved = Act("32,50", chosen.NextStep, chosen.Draft);
+        var amount = Act("32,50", chosen.NextStep, chosen.Draft);
+        Assert.Equal(MenuStep.AwaitingExpenseDescription, amount.NextStep);
+
+        var saved = Act("padaria", amount.NextStep, amount.Draft);
 
         Assert.Equal(MenuStep.Main, saved.NextStep);
         Assert.NotNull(saved.Expense);
         Assert.Equal(method, saved.Expense.Method);
         Assert.Equal(32.50m, saved.Expense.Amount);
+        Assert.Equal("padaria", saved.Expense.Description);
         Assert.Null(saved.Expense.CardId);
         Assert.Null(saved.Expense.Installments);
+        Assert.False(saved.Expense.IsFixed);
         Assert.Contains(label, saved.Reply);
         Assert.Contains("R$ 32,50", saved.Reply);
+        Assert.Contains("padaria", saved.Reply);
         Assert.Contains("1 - Registrar gasto", saved.Reply);
     }
 
     [Fact]
     public void Credit_card_keeps_installments_and_existing_card()
     {
-        var amount = Act("1.200,00", MenuStep.AwaitingAmount, new SessionDraft { Method = PaymentMethod.CreditCard });
-        var parcels = Act("10", amount.NextStep, amount.Draft, Cards());
-        Assert.Equal(MenuStep.AwaitingCardChoice, parcels.NextStep);
-        Assert.Contains("Nubank", parcels.Reply);
-        Assert.DoesNotContain("Inter", parcels.Reply);
+        var chosen = Act("2", MenuStep.ExpenseMenu);
+        var parcels = Act("1", chosen.NextStep, chosen.Draft);
+        var count = Act("10", parcels.NextStep, parcels.Draft);
+        var amount = Act("1.200,00", count.NextStep, count.Draft, Cards());
+        Assert.Equal(MenuStep.AwaitingCardChoice, amount.NextStep);
+        Assert.Contains("Nubank", amount.Reply);
+        Assert.DoesNotContain("Inter", amount.Reply);
 
-        var saved = Act("1", parcels.NextStep, parcels.Draft, Cards());
+        var card = Act("1", amount.NextStep, amount.Draft, Cards());
+        var saved = Act("mercado", card.NextStep, card.Draft, Cards());
         Assert.Equal(NubankId, saved.Expense!.CardId);
         Assert.Equal(10, saved.Expense.Installments);
+        Assert.Equal("mercado", saved.Expense.Description);
+        Assert.False(saved.Expense.IsFixed);
         Assert.False(saved.Expense.CreateCard);
         Assert.Equal(1200m, saved.Expense.Amount);
         Assert.Contains("em 10x", saved.Reply);
         Assert.Contains("Nubank", saved.Reply);
+        Assert.Contains("mercado", saved.Reply);
+    }
+
+    [Fact]
+    public void Credit_card_in_full_and_fixed_skip_installments()
+    {
+        var credit = Act("2", MenuStep.ExpenseMenu);
+        var inFull = Act("2", credit.NextStep, credit.Draft);
+        Assert.Equal(MenuStep.AwaitingAmount, inFull.NextStep);
+        Assert.Equal(CardBilling.InFull, inFull.Draft.Billing);
+
+        var fixedChoice = Act("3", MenuStep.AwaitingCreditCharge, new SessionDraft { Method = PaymentMethod.CreditCard });
+        Assert.Equal(MenuStep.AwaitingAmount, fixedChoice.NextStep);
+        Assert.Equal(CardBilling.Fixed, fixedChoice.Draft.Billing);
+    }
+
+    [Fact]
+    public void Debit_card_offers_in_full_or_fixed()
+    {
+        var debit = Act("3", MenuStep.ExpenseMenu);
+        Assert.Equal(MenuStep.AwaitingDebitCharge, debit.NextStep);
+        Assert.Contains("2 - Fixo", debit.Reply);
+        Assert.DoesNotContain("Numero de parcelas", debit.Reply);
+
+        var fixedChoice = Act("2", debit.NextStep, debit.Draft);
+        var amount = Act("40,00", fixedChoice.NextStep, fixedChoice.Draft, Cards());
+        var card = Act("1", amount.NextStep, amount.Draft, Cards());
+        var saved = Act("netflix", card.NextStep, card.Draft, Cards());
+
+        Assert.True(saved.Expense!.IsFixed);
+        Assert.Equal(InterId, saved.Expense.CardId);
+        Assert.Equal("netflix", saved.Expense.Description);
+        Assert.Contains("fixo", saved.Reply);
     }
 
     [Fact]
@@ -96,27 +140,34 @@ public class MenuEngineTests
     [Fact]
     public void Option_99_asks_for_a_new_card_and_saves_it()
     {
-        var draft = new SessionDraft { Method = PaymentMethod.DebitCard, Amount = 40 };
+        var draft = new SessionDraft { Method = PaymentMethod.DebitCard, Amount = 40, Billing = CardBilling.InFull };
         var ask = Act("99", MenuStep.AwaitingCardChoice, draft, Cards());
         Assert.Equal(MenuStep.AwaitingNewCardName, ask.NextStep);
 
-        var saved = Act("C6", ask.NextStep, ask.Draft, Cards());
+        var named = Act("C6", ask.NextStep, ask.Draft, Cards());
+        Assert.Equal(MenuStep.AwaitingExpenseDescription, named.NextStep);
+
+        var saved = Act("farmacia", named.NextStep, named.Draft, Cards());
         Assert.True(saved.Expense!.CreateCard);
         Assert.Equal("C6", saved.Expense.CardName);
+        Assert.Equal("farmacia", saved.Expense.Description);
         Assert.Null(saved.Expense.CardId);
         Assert.Equal(PaymentMethod.DebitCard, saved.Expense.Method);
         Assert.Equal(40m, saved.Expense.Amount);
+        Assert.Contains("a vista", saved.Reply);
     }
 
     [Fact]
     public void Repeated_card_name_reuses_the_existing_card()
     {
-        var draft = new SessionDraft { Method = PaymentMethod.DebitCard, Amount = 15 };
-        var saved = Act("inter", MenuStep.AwaitingNewCardName, draft, Cards());
+        var draft = new SessionDraft { Method = PaymentMethod.DebitCard, Amount = 15, Billing = CardBilling.InFull };
+        var named = Act("inter", MenuStep.AwaitingNewCardName, draft, Cards());
+        var saved = Act("almoco", named.NextStep, named.Draft, Cards());
 
         Assert.False(saved.Expense!.CreateCard);
         Assert.Equal(InterId, saved.Expense.CardId);
         Assert.Equal("Inter", saved.Expense.CardName);
+        Assert.Equal("almoco", saved.Expense.Description);
     }
 
     [Fact]
@@ -168,6 +219,36 @@ public class MenuEngineTests
         Assert.Equal(MenuStep.AwaitingDateRange, invalid.NextStep);
         Assert.Null(invalid.Summary);
         Assert.Contains("Periodo invalido", invalid.Reply);
+
+        var remove = Act("5", MenuStep.SummaryMenu);
+        Assert.Equal(MenuStep.RemoveMenu, remove.NextStep);
+        Assert.Contains("1 - Ultimos 10 registros", remove.Reply);
+    }
+
+    [Fact]
+    public void Remove_lists_by_recency_or_date_and_deletes_the_selected_id()
+    {
+        var latest = Act("1", MenuStep.RemoveMenu);
+        Assert.Equal(MenuStep.AwaitingDeleteChoice, latest.NextStep);
+        Assert.Equal(10, latest.DeleteList!.Take);
+        Assert.Null(latest.DeleteList.From);
+
+        var ask = Act("2", MenuStep.RemoveMenu);
+        var ranged = Act("01/10/2026 - 13/10/2026", ask.NextStep);
+        Assert.Equal(new DateOnly(2026, 10, 1), ranged.DeleteList!.From);
+        Assert.Equal(new DateOnly(2026, 10, 13), ranged.DeleteList.To);
+
+        var first = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var second = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var draft = new SessionDraft { DeleteIds = [first, second] };
+        var deleted = Act("2", MenuStep.AwaitingDeleteChoice, draft);
+        Assert.Equal(second, deleted.DeleteId);
+        Assert.Equal(MenuStep.RemoveMenu, deleted.NextStep);
+
+        var invalid = Act("9", MenuStep.AwaitingDeleteChoice, draft);
+        Assert.Null(invalid.DeleteId);
+        Assert.Equal(MenuStep.AwaitingDeleteChoice, invalid.NextStep);
+        Assert.Contains("Id invalido", invalid.Reply);
     }
 
     private static MenuTurn Act(

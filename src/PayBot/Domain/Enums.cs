@@ -22,6 +22,13 @@ public enum CardKind
     Debit = 2
 }
 
+public enum CardBilling
+{
+    Installments = 1,
+    InFull = 2,
+    Fixed = 3
+}
+
 public enum MenuStep
 {
     Main = 0,
@@ -33,5 +40,11 @@ public enum MenuStep
     AwaitingIncomeAmount = 6,
     AwaitingIncomeDescription = 7,
     SummaryMenu = 8,
-    AwaitingDateRange = 9
+    AwaitingDateRange = 9,
+    AwaitingCreditCharge = 10,
+    AwaitingDebitCharge = 11,
+    AwaitingExpenseDescription = 12,
+    RemoveMenu = 13,
+    AwaitingDeleteDateRange = 14,
+    AwaitingDeleteChoice = 15
 }

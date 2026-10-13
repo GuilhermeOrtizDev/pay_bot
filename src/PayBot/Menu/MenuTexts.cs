@@ -32,6 +32,29 @@ public static class MenuTexts
         2 - Resumo do ano
         3 - Resumo total
         4 - Filtrar data, ex: 10/05/2026 - 20/05/2026
+        5 - Remover
+        """;
+
+    public const string CreditCharge = """
+        Cartao credito
+        0 - Voltar Menu Inicial
+        1 - Numero de parcelas
+        2 - A vista
+        3 - Fixo
+        """;
+
+    public const string DebitCharge = """
+        Cartao debito
+        0 - Voltar Menu Inicial
+        1 - A vista
+        2 - Fixo
+        """;
+
+    public const string Remove = """
+        Remover
+        0 - Voltar Menu Inicial
+        1 - Ultimos 10 registros
+        2 - Filtrar por data
         """;
 
     public const string AskAmount = "Informe o valor";
@@ -44,6 +67,9 @@ public static class MenuTexts
     public const string InvalidPeriod = "Periodo invalido. Ex: 10/05/2026 - 20/05/2026";
     public const string InvalidCardName = "Nome do cartao invalido.";
     public const string InvalidDescription = "Descricao invalida.";
+    public const string InvalidDeleteId = "Id invalido.";
+    public const string NoRecords = "Nenhum registro.";
+    public const string RecordNotFound = "Registro nao encontrado.";
 
     public static string MethodLabel(PaymentMethod method) => method switch
     {
