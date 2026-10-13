@@ -12,7 +12,8 @@ public sealed record PendingExpense(
     string? CardName,
     bool CreateCard,
     string Description,
-    bool IsFixed);
+    bool IsFixed,
+    DateOnly? ChargeMonth);
 
 public sealed record DeleteListRequest(DateOnly? From, DateOnly? To, int Take);
 
@@ -28,4 +29,5 @@ public sealed record MenuTurn(
     PendingIncome? Income,
     SummaryQuery? Summary,
     DeleteListRequest? DeleteList = null,
-    Guid? DeleteId = null);
+    Guid? DeleteId = null,
+    bool AsPdf = false);

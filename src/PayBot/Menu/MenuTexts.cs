@@ -57,14 +57,25 @@ public static class MenuTexts
         2 - Filtrar por data
         """;
 
+    public const string SummaryOutput = """
+        Como enviar o resumo
+        0 - Voltar Menu Inicial
+        1 - Gerar em PDF
+        2 - Gerar em texto
+        """;
+
+    public const string PdfFailed = "Nao consegui enviar o PDF.";
+
     public const string AskAmount = "Informe o valor";
     public const string AskInstallments = "Numero de parcelas";
     public const string AskCardName = "Informe o nome do cartao";
     public const string AskDescription = "Informe a descricao";
     public const string AskPeriod = "Informe o periodo. Ex: 10/05/2026 - 20/05/2026";
+    public const string AskChargeMonth = "A partir de qual mes? Ex: 10/2026";
     public const string InvalidAmount = "Valor invalido. Ex: 32,50";
     public const string InvalidInstallments = "Numero de parcelas invalido. Ex: 10";
     public const string InvalidPeriod = "Periodo invalido. Ex: 10/05/2026 - 20/05/2026";
+    public const string InvalidChargeMonth = "Mes invalido. Ex: 10/2026";
     public const string InvalidCardName = "Nome do cartao invalido.";
     public const string InvalidDescription = "Descricao invalida.";
     public const string InvalidDeleteId = "Id invalido.";

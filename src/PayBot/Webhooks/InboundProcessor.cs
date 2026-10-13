@@ -112,7 +112,29 @@ public sealed class InboundProcessor(
         if (turn.Summary is not null)
         {
             var report = await summaries.BuildAsync(turn.Summary, cancellationToken);
-            reply = SummaryFormatter.Format(report) + "\n\n" + MenuTexts.Summary;
+            if (turn.AsPdf)
+            {
+                var sent = await evolution.SendDocumentAsync(
+                    SummaryPdf.Render(report),
+                    "resumo.pdf",
+                    report.Title,
+                    cancellationToken);
+                if (sent)
+                    reply = MenuTexts.Summary;
+                else
+                {
+                    reply = MenuTexts.PdfFailed + "\n\n" + MenuTexts.SummaryOutput;
+                    nextStep = MenuStep.AwaitingSummaryOutput;
+                    draft = new SessionDraft
+                    {
+                        SummaryFrom = turn.Summary.From,
+                        SummaryTo = turn.Summary.To,
+                        SummaryTitle = turn.Summary.Title
+                    };
+                }
+            }
+            else
+                reply = SummaryFormatter.Format(report) + "\n\n" + MenuTexts.Summary;
         }
 
         if (turn.DeleteList is not null)
@@ -209,11 +231,12 @@ public sealed class InboundProcessor(
             }
         }
 
+        var chargeDate = expense.ChargeMonth ?? SaoPauloClock.LocalDate(now);
         db.Transactions.Add(new LedgerEntry
         {
             Id = Guid.NewGuid(),
-            OccurredAt = now,
-            LocalDate = SaoPauloClock.LocalDate(now),
+            OccurredAt = expense.ChargeMonth is null ? now : SaoPauloClock.AtNoon(chargeDate),
+            LocalDate = chargeDate,
             Direction = Direction.Expense,
             Amount = expense.Amount,
             PaymentMethod = expense.Method,
