@@ -100,6 +100,16 @@ public static class MenuTexts
         return amount < 0 ? $"-R$ {formatted}" : $"R$ {formatted}";
     }
 
+    public static string WithMonthBalance(string reply, DateOnly month, decimal balance)
+    {
+        var line = $"Saldo de {month.ToString("MM/yyyy", CultureInfo.InvariantCulture)}: {Money(balance)}";
+        var menu = "\n\n" + Main;
+        if (reply.EndsWith(menu, StringComparison.Ordinal))
+            return string.Concat(reply.AsSpan(0, reply.Length - menu.Length), "\n", line, menu);
+
+        return reply + "\n\n" + line;
+    }
+
     public static string CardList(IReadOnlyList<KnownCard> cards)
     {
         var builder = new StringBuilder();

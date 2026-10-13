@@ -137,6 +137,20 @@ public class SummaryTests
     };
 
     [Fact]
+    public async Task Month_balance_is_income_minus_expenses()
+    {
+        await using var db = await TestDb.CreateAsync();
+        db.Transactions.Add(Income(new DateOnly(2026, 10, 2), 3000, "salario"));
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 3), 450, PaymentMethod.Pix));
+        db.Transactions.Add(Expense(new DateOnly(2026, 9, 1), 999, PaymentMethod.Pix));
+        await db.SaveChangesAsync();
+
+        var balance = await new SummaryService(db).MonthBalanceAsync(new DateOnly(2026, 10, 15), CancellationToken.None);
+
+        Assert.Equal(2550m, balance);
+    }
+
+    [Fact]
     public void Pdf_contains_the_summary_title()
     {
         var report = SummaryAggregator.Build(

@@ -17,7 +17,7 @@ public sealed record PendingExpense(
 
 public sealed record DeleteListRequest(DateOnly? From, DateOnly? To, int Take);
 
-public sealed record PendingIncome(decimal Amount, string Description);
+public sealed record PendingIncome(decimal Amount, string Description, DateOnly ChargeMonth);
 
 public sealed record SummaryQuery(DateOnly? From, DateOnly? To, string Title);
 

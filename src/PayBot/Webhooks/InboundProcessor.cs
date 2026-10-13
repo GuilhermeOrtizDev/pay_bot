@@ -104,7 +104,7 @@ public sealed class InboundProcessor(
         if (turn.Expense is not null)
             await AddExpenseAsync(turn.Expense, message.MessageId, now, cancellationToken);
         if (turn.Income is not null)
-            AddIncome(turn.Income, message.MessageId, now);
+            AddIncome(turn.Income, message.MessageId);
 
         var reply = turn.Reply;
         var nextStep = turn.NextStep;
@@ -195,6 +195,9 @@ public sealed class InboundProcessor(
             return;
         }
 
+        if (turn.Expense is not null || turn.Income is not null)
+            reply = await AppendMonthBalanceAsync(reply, turn, now, cancellationToken);
+
         if (!string.IsNullOrWhiteSpace(reply))
             await evolution.SendAsync(reply, cancellationToken);
 
@@ -203,7 +206,7 @@ public sealed class InboundProcessor(
 
     private static string FailureReply(MenuStep step) => step switch
     {
-        MenuStep.AwaitingChargeMonth => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskChargeMonth,
+        MenuStep.AwaitingChargeMonth or MenuStep.AwaitingIncomeMonth => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskChargeMonth,
         MenuStep.AwaitingDateRange or MenuStep.AwaitingDeleteDateRange => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskPeriod,
         MenuStep.AwaitingAmount or MenuStep.AwaitingIncomeAmount => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskAmount,
         MenuStep.AwaitingExpenseDescription or MenuStep.AwaitingIncomeDescription => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskDescription,
@@ -280,13 +283,28 @@ public sealed class InboundProcessor(
             .ToListAsync(cancellationToken);
     }
 
-    private void AddIncome(PendingIncome income, string messageId, DateTimeOffset now)
+    private async Task<string> AppendMonthBalanceAsync(string reply, MenuTurn turn, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var month = turn.Expense?.ChargeMonth ?? turn.Income?.ChargeMonth ?? SaoPauloClock.LocalDate(now);
+        try
+        {
+            var balance = await summaries.MonthBalanceAsync(month, cancellationToken);
+            return MenuTexts.WithMonthBalance(reply, month, balance);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Falha ao calcular o saldo de {Month}.", month);
+            return reply;
+        }
+    }
+
+    private void AddIncome(PendingIncome income, string messageId)
     {
         db.Transactions.Add(new LedgerEntry
         {
             Id = Guid.NewGuid(),
-            OccurredAt = now,
-            LocalDate = SaoPauloClock.LocalDate(now),
+            OccurredAt = SaoPauloClock.AtNoon(income.ChargeMonth),
+            LocalDate = income.ChargeMonth,
             Direction = Direction.Income,
             Amount = income.Amount,
             Description = income.Description,

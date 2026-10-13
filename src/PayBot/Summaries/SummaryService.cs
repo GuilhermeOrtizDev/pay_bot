@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PayBot.Data;
+using PayBot.Domain;
 using PayBot.Menu;
 
 namespace PayBot.Summaries;
@@ -24,5 +25,19 @@ public sealed class SummaryService(PayBotDbContext db)
             .ToListAsync(cancellationToken);
 
         return SummaryAggregator.Build(query.Title, rows);
+    }
+
+    public async Task<decimal> MonthBalanceAsync(DateOnly date, CancellationToken cancellationToken)
+    {
+        var start = new DateOnly(date.Year, date.Month, 1);
+        var end = start.AddMonths(1).AddDays(-1);
+        var rows = await db.Transactions.AsNoTracking()
+            .Where(entry => entry.LocalDate >= start && entry.LocalDate <= end)
+            .Select(entry => new { entry.Direction, entry.Amount })
+            .ToListAsync(cancellationToken);
+
+        var income = rows.Where(row => row.Direction == Direction.Income).Sum(row => row.Amount);
+        var expense = rows.Where(row => row.Direction == Direction.Expense).Sum(row => row.Amount);
+        return income - expense;
     }
 }

@@ -210,15 +210,32 @@ public class MenuEngineTests
     }
 
     [Fact]
-    public void Income_asks_description_then_saves()
+    public void Income_asks_description_then_month()
     {
         var amount = Act("3000", MenuStep.AwaitingIncomeAmount);
-        var saved = Act("salario", amount.NextStep, amount.Draft);
+        var described = Act("salario", amount.NextStep, amount.Draft);
+        Assert.Equal(MenuStep.AwaitingIncomeMonth, described.NextStep);
 
+        var invalid = Act("salario", described.NextStep, described.Draft);
+        Assert.Equal(MenuStep.AwaitingIncomeMonth, invalid.NextStep);
+        Assert.Null(invalid.Income);
+
+        var saved = Act("10/2026", invalid.NextStep, invalid.Draft);
         Assert.Equal(3000m, saved.Income!.Amount);
         Assert.Equal("salario", saved.Income.Description);
-        Assert.Contains("Entrada registrada: R$ 3.000,00 - salario", saved.Reply);
+        Assert.Equal(new DateOnly(2026, 10, 1), saved.Income.ChargeMonth);
+        Assert.Contains("Entrada registrada: R$ 3.000,00 a partir de 10/2026 - salario", saved.Reply);
         Assert.Equal(MenuStep.Main, saved.NextStep);
+    }
+
+    [Fact]
+    public void Confirmation_places_the_month_balance_before_the_menu()
+    {
+        var reply = "Gasto registrado: Pix R$ 10,00 - pao\n\n" + MenuTexts.Main;
+        var withBalance = MenuTexts.WithMonthBalance(reply, new DateOnly(2026, 10, 1), -15.5m);
+        var text = withBalance.Replace("\r\n", "\n");
+
+        Assert.Contains("Saldo de 10/2026: -R$ 15,50\n\n1 - Registrar gasto", text);
     }
 
     [Fact]

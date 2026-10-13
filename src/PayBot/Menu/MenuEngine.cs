@@ -32,6 +32,7 @@ public static class MenuEngine
             MenuStep.AwaitingChargeMonth => OnChargeMonth(text, draft),
             MenuStep.AwaitingIncomeAmount => OnIncomeAmount(text, draft),
             MenuStep.AwaitingIncomeDescription => OnIncomeDescription(text, draft),
+            MenuStep.AwaitingIncomeMonth => OnIncomeMonth(text, draft),
             MenuStep.SummaryMenu => OnSummary(text, today),
             MenuStep.AwaitingSummaryOutput => OnSummaryOutput(text, draft),
             MenuStep.AwaitingDateRange => OnDateRange(text),
@@ -240,8 +241,22 @@ public static class MenuEngine
         if (description.Length is 0 or > 200)
             return Stay(MenuStep.AwaitingIncomeDescription, draft, MenuTexts.InvalidDescription);
 
-        var income = new PendingIncome(draft.Amount.Value, description);
-        var reply = $"Entrada registrada: {MenuTexts.Money(income.Amount)} - {description}\n\n{MenuTexts.Main}";
+        draft.Description = description;
+        return Stay(MenuStep.AwaitingIncomeMonth, draft, MenuTexts.AskChargeMonth);
+    }
+
+    private static MenuTurn OnIncomeMonth(string text, SessionDraft draft)
+    {
+        if (draft.Amount is null || string.IsNullOrWhiteSpace(draft.Description))
+            return OpenMain();
+        if (!TryParseMonth(text, out var month))
+            return Stay(MenuStep.AwaitingIncomeMonth, draft, MenuTexts.InvalidChargeMonth);
+
+        draft.ChargeMonth = month;
+        var description = draft.Description.Trim();
+        var income = new PendingIncome(draft.Amount.Value, description, month);
+        var start = month.ToString("MM/yyyy", CultureInfo.InvariantCulture);
+        var reply = $"Entrada registrada: {MenuTexts.Money(income.Amount)} a partir de {start} - {description}\n\n{MenuTexts.Main}";
         return new MenuTurn(reply, MenuStep.Main, new SessionDraft(), null, income, null);
     }
 
