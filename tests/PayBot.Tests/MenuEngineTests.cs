@@ -22,6 +22,11 @@ public class MenuEngineTests
         var summary = Act("3", MenuStep.Main);
         Assert.Equal(MenuStep.SummaryMenu, summary.NextStep);
         Assert.Contains("4 - Filtrar data", summary.Reply);
+        Assert.DoesNotContain("5 - Remover", summary.Reply);
+
+        var remove = Act("4", MenuStep.Main);
+        Assert.Equal(MenuStep.RemoveMenu, remove.NextStep);
+        Assert.Contains("1 - Ultimos 10 registros", remove.Reply);
     }
 
     [Fact]
@@ -258,9 +263,6 @@ public class MenuEngineTests
         Assert.Null(invalid.Summary);
         Assert.Contains("Periodo invalido", invalid.Reply);
 
-        var remove = Act("5", MenuStep.SummaryMenu);
-        Assert.Equal(MenuStep.RemoveMenu, remove.NextStep);
-        Assert.Contains("1 - Ultimos 10 registros", remove.Reply);
     }
 
     [Fact]

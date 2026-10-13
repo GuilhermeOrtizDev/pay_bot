@@ -47,6 +47,7 @@ public static class MenuEngine
         "1" => new MenuTurn(MenuTexts.Expense, MenuStep.ExpenseMenu, new SessionDraft(), null, null, null),
         "2" => new MenuTurn(MenuTexts.AskAmount, MenuStep.AwaitingIncomeAmount, new SessionDraft(), null, null, null),
         "3" => new MenuTurn(MenuTexts.Summary, MenuStep.SummaryMenu, new SessionDraft(), null, null, null),
+        "4" => new MenuTurn(MenuTexts.Remove, MenuStep.RemoveMenu, new SessionDraft(), null, null, null),
         _ => OpenMain()
     };
 
@@ -250,7 +251,6 @@ public static class MenuEngine
         "2" => Period(new DateOnly(today.Year, 1, 1), new DateOnly(today.Year, 12, 31)),
         "3" => AskFormat(new SummaryQuery(null, null, "Resumo total")),
         "4" => Stay(MenuStep.AwaitingDateRange, new SessionDraft(), MenuTexts.AskPeriod),
-        "5" => Stay(MenuStep.RemoveMenu, new SessionDraft(), MenuTexts.Remove),
         _ => Stay(MenuStep.SummaryMenu, new SessionDraft(), MenuTexts.Summary)
     };
 

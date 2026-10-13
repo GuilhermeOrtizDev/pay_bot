@@ -12,6 +12,7 @@ public static class MenuTexts
         1 - Registrar gasto
         2 - Registrar entrada
         3 - Resumo
+        4 - Remover
         """;
 
     public const string Expense = """
@@ -32,7 +33,6 @@ public static class MenuTexts
         2 - Resumo do ano
         3 - Resumo total
         4 - Filtrar data, ex: 10/05/2026 - 20/05/2026
-        5 - Remover
         """;
 
     public const string CreditCharge = """
