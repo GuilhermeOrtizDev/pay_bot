@@ -58,13 +58,11 @@ public sealed class InboundProcessor(
 
     private async Task ProcessAsync(CandidateMessage message, PayBotOptions settings, CancellationToken cancellationToken)
     {
-        if (!InboundMessageParser.IsAllowedSender(
-                message.RemoteJid,
-                message.FromMe,
-                message.Participant,
-                settings.GroupJid,
-                settings.OwnerNumber))
+        if (!InboundMessageParser.IsAllowedSender(message.RemoteJid, settings.GroupJid))
+        {
+            logger.LogInformation("Mensagem ignorada. Chat {RemoteJid}.", message.RemoteJid);
             return;
+        }
 
         if (string.IsNullOrWhiteSpace(message.Text) || BotEcho.IsEcho(message.Text))
             return;

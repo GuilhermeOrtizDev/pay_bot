@@ -63,22 +63,12 @@ public static class InboundMessageParser
             || string.Equals(headerKey, expected, StringComparison.Ordinal);
     }
 
-    public static bool IsAllowedSender(
-        string remoteJid,
-        bool fromMe,
-        string? participant,
-        string groupJid,
-        string ownerNumber)
+    public static bool IsAllowedSender(string remoteJid, string groupJid)
     {
-        if (string.IsNullOrWhiteSpace(groupJid))
+        if (string.IsNullOrWhiteSpace(groupJid) || string.IsNullOrWhiteSpace(remoteJid))
             return false;
-        if (!string.Equals(remoteJid.Trim(), groupJid.Trim(), StringComparison.OrdinalIgnoreCase))
-            return false;
-        if (fromMe)
-            return true;
 
-        var owner = Digits(ownerNumber);
-        return owner.Length > 0 && Digits(participant ?? "") == owner;
+        return string.Equals(remoteJid.Trim(), groupJid.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     public static ParsedWebhook Parse(string json)
@@ -96,18 +86,6 @@ public static class InboundMessageParser
             AcceptEvent = accept,
             Messages = messages
         };
-    }
-
-    public static string Digits(string value)
-    {
-        var head = value;
-        var at = head.IndexOf('@');
-        if (at >= 0)
-            head = head[..at];
-        var colon = head.IndexOf(':');
-        if (colon >= 0)
-            head = head[..colon];
-        return new string(head.Where(char.IsDigit).ToArray());
     }
 
     private static void Collect(JsonElement data, List<CandidateMessage> messages)
@@ -147,10 +125,21 @@ public static class InboundMessageParser
 
         messages.Add(new CandidateMessage(
             id,
-            ReadString(key, "remoteJid") ?? "",
+            GroupChatJid(key),
             ReadBool(key, "fromMe"),
             ReadString(key, "participant"),
             text));
+    }
+
+    private static string GroupChatJid(JsonElement key)
+    {
+        var remote = ReadString(key, "remoteJid") ?? "";
+        var alternate = ReadString(key, "remoteJidAlt");
+        if (remote.EndsWith("@g.us", StringComparison.OrdinalIgnoreCase))
+            return remote;
+        if (alternate is not null && alternate.EndsWith("@g.us", StringComparison.OrdinalIgnoreCase))
+            return alternate;
+        return remote;
     }
 
     private static JsonElement Unwrap(JsonElement message)
