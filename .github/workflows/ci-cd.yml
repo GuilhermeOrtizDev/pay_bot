@@ -7,7 +7,7 @@
 #   SSH_PRIVATE_KEY   — private key for SSH/SCP
 #   SSH_PORT          — optional (default 22)
 #
-# The server .env lives at /www/paybot/.env and is not uploaded by this workflow.
+# The server .env lives at /www/.env and is not uploaded by this workflow.
 # Trigger: push to main, or workflow_dispatch.
 
 name: CI/CD
@@ -93,10 +93,10 @@ jobs:
       - name: Stage compose files
         run: |
           set -euo pipefail
-          mkdir -p deploy-stage/nginx deploy-stage/docker/postgres/init
+          mkdir -p deploy-stage/nginx deploy-stage/postgres/init
           cp docker-compose.yml deploy-stage/docker-compose.yml
           cp nginx/default.conf deploy-stage/nginx/default.conf
-          cp docker/postgres/init/01-paybot.sql deploy-stage/docker/postgres/init/01-paybot.sql
+          cp postgres/init/01-paybot.sql deploy-stage/postgres/init/01-paybot.sql
           test -f deploy-stage/paybot.tar
 
       - name: SCP to server
@@ -126,29 +126,29 @@ jobs:
               exit 1
             fi
 
-            sudo mkdir -p /www/paybot/nginx /www/paybot/docker/postgres/init /www/paybot/bkp
-            if [ -f /www/paybot/paybot.tar ]; then
-              sudo cp /www/paybot/paybot.tar /www/paybot/bkp/paybot.tar
+            sudo mkdir -p /www/nginx /www/postgres/init /www/docker/latest /www/docker/bkp
+            if [ -f /www/docker/latest/paybot.tar ]; then
+              sudo cp /www/docker/latest/paybot.tar /www/docker/bkp/paybot.tar
             fi
 
-            sudo cp /tmp/gha-paybot/paybot.tar /www/paybot/paybot.tar
-            sudo cp /tmp/gha-paybot/docker-compose.yml /www/paybot/docker-compose.yml
-            sudo cp /tmp/gha-paybot/nginx/default.conf /www/paybot/nginx/default.conf
-            sudo cp /tmp/gha-paybot/docker/postgres/init/01-paybot.sql /www/paybot/docker/postgres/init/01-paybot.sql
+            sudo cp /tmp/gha-paybot/paybot.tar /www/docker/latest/paybot.tar
+            sudo cp /tmp/gha-paybot/docker-compose.yml /www/docker-compose.yml
+            sudo cp /tmp/gha-paybot/nginx/default.conf /www/nginx/default.conf
+            sudo cp /tmp/gha-paybot/postgres/init/01-paybot.sql /www/postgres/init/01-paybot.sql
 
-            if [ ! -f /www/paybot/.env ]; then
-              echo "Missing /www/paybot/.env. Create it on the server before deploying."
+            if [ ! -f /www/.env ]; then
+              echo "Missing /www/.env. Create it on the server before deploying."
               exit 1
             fi
 
-            sudo docker load --input /www/paybot/paybot.tar
+            sudo docker load --input /www/docker/latest/paybot.tar
 
             if ! docker compose version >/dev/null 2>&1; then
               echo "docker compose plugin not found"
               exit 1
             fi
 
-            cd /www/paybot
+            cd /www
             export COMPOSE_PROJECT_NAME=paybot
             docker compose pull nginx evolution postgres
             docker compose up -d --pull never

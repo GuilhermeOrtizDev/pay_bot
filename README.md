@@ -49,7 +49,7 @@ Push na `main` (ou execucao manual do workflow) testa, gera a imagem `linux/arm6
 - `SSH_PRIVATE_KEY`
 - `SSH_PORT` (opcional, padrao 22)
 
-Antes do primeiro deploy, crie `/www/paybot/.env` na EC2 (copie de `.env.example`). O pipeline nao envia esse arquivo.
+Antes do primeiro deploy, crie `/www/.env` na EC2 (copie de `.env.example`). O pipeline nao envia esse arquivo. O `docker-compose.yml` fica em `/www/docker-compose.yml`.
 
 ## Backup
 
