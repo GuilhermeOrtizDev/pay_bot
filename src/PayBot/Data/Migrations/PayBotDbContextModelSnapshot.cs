@@ -107,6 +107,9 @@ namespace PayBot.Data.Migrations
                     b.Property<int?>("Installments")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("IsFixed")
+                        .HasColumnType("boolean");
+
                     b.Property<DateOnly>("LocalDate")
                         .HasColumnType("date");
 

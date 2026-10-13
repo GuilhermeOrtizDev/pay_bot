@@ -10,6 +10,7 @@ public sealed class LedgerEntry
     public PaymentMethod? PaymentMethod { get; set; }
     public string? Description { get; set; }
     public int? Installments { get; set; }
+    public bool IsFixed { get; set; }
     public Guid? CardId { get; set; }
     public Card? Card { get; set; }
     public string WhatsAppMessageId { get; set; } = "";

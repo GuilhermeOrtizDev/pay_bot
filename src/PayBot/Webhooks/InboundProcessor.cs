@@ -107,14 +107,46 @@ public sealed class InboundProcessor(
             AddIncome(turn.Income, message.MessageId, now);
 
         var reply = turn.Reply;
+        var nextStep = turn.NextStep;
+        var draft = turn.Draft;
         if (turn.Summary is not null)
         {
             var report = await summaries.BuildAsync(turn.Summary, cancellationToken);
             reply = SummaryFormatter.Format(report) + "\n\n" + MenuTexts.Summary;
         }
 
-        session.Step = turn.NextStep;
-        session.DraftJson = JsonSerializer.Serialize(turn.Draft, DraftOptions);
+        if (turn.DeleteList is not null)
+        {
+            var entries = await LoadDeleteCandidatesAsync(turn.DeleteList, cancellationToken);
+            if (entries.Count == 0)
+            {
+                reply = MenuTexts.NoRecords + "\n\n" + MenuTexts.Remove;
+                nextStep = MenuStep.RemoveMenu;
+                draft = new SessionDraft();
+            }
+            else
+            {
+                reply = DeleteListFormatter.Format(entries);
+                draft.DeleteIds = entries.Select(entry => entry.Id).ToList();
+            }
+        }
+
+        if (turn.DeleteId is Guid deleteId)
+        {
+            var entry = await db.Transactions
+                .Include(item => item.Card)
+                .FirstOrDefaultAsync(item => item.Id == deleteId, cancellationToken);
+            if (entry is null)
+                reply = MenuTexts.RecordNotFound + "\n\n" + MenuTexts.Remove;
+            else
+            {
+                reply = $"Registro removido: {DeleteListFormatter.Line(entry)}\n\n{MenuTexts.Remove}";
+                db.Transactions.Remove(entry);
+            }
+        }
+
+        session.Step = nextStep;
+        session.DraftJson = JsonSerializer.Serialize(draft, DraftOptions);
         session.UpdatedAt = now;
         db.ProcessedMessages.Add(new ProcessedMessage
         {
@@ -185,10 +217,25 @@ public sealed class InboundProcessor(
             Direction = Direction.Expense,
             Amount = expense.Amount,
             PaymentMethod = expense.Method,
+            Description = expense.Description,
             Installments = expense.Installments,
+            IsFixed = expense.IsFixed,
             CardId = cardId,
             WhatsAppMessageId = messageId
         });
+    }
+
+    private async Task<List<LedgerEntry>> LoadDeleteCandidatesAsync(DeleteListRequest request, CancellationToken cancellationToken)
+    {
+        var query = db.Transactions.Include(entry => entry.Card).AsQueryable();
+        if (request.From is DateOnly from && request.To is DateOnly to)
+            query = query.Where(entry => entry.LocalDate >= from && entry.LocalDate <= to);
+
+        return await query
+            .OrderByDescending(entry => entry.LocalDate)
+            .ThenByDescending(entry => entry.OccurredAt)
+            .Take(request.Take)
+            .ToListAsync(cancellationToken);
     }
 
     private void AddIncome(PendingIncome income, string messageId, DateTimeOffset now)

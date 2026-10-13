@@ -10,7 +10,11 @@ public sealed record PendingExpense(
     int? Installments,
     Guid? CardId,
     string? CardName,
-    bool CreateCard);
+    bool CreateCard,
+    string Description,
+    bool IsFixed);
+
+public sealed record DeleteListRequest(DateOnly? From, DateOnly? To, int Take);
 
 public sealed record PendingIncome(decimal Amount, string Description);
 
@@ -22,4 +26,6 @@ public sealed record MenuTurn(
     SessionDraft Draft,
     PendingExpense? Expense,
     PendingIncome? Income,
-    SummaryQuery? Summary);
+    SummaryQuery? Summary,
+    DeleteListRequest? DeleteList = null,
+    Guid? DeleteId = null);
