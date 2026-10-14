@@ -163,6 +163,25 @@ public class SummaryTests
         Assert.Contains("Resumo total", text);
         Assert.Contains("salario", text);
     }
+
+    [Fact]
+    public void Pdf_lists_each_expense()
+    {
+        var report = SummaryAggregator.Build(
+            "Resumo de 01/10/2026 a 31/10/2026",
+            [
+                new SummaryRow(new DateOnly(2026, 10, 3), Direction.Expense, 50, PaymentMethod.Pix, "padaria", null, null),
+                new SummaryRow(new DateOnly(2026, 10, 5), Direction.Expense, 1200, PaymentMethod.CreditCard, "mercado", "Nubank", 10),
+                new SummaryRow(new DateOnly(2026, 10, 1), Direction.Expense, 80, PaymentMethod.CreditCard, "netflix", "Inter", null, true),
+                new SummaryRow(new DateOnly(2026, 10, 2), Direction.Income, 3000, null, "salario", null, null)
+            ]);
+        var text = System.Text.Encoding.ASCII.GetString(SummaryPdf.Render(report));
+
+        Assert.Contains("01/10/2026 Cartao credito Inter fixo: R$ 80,00 - netflix", text);
+        Assert.Contains("03/10/2026 Pix: R$ 50,00 - padaria", text);
+        Assert.Contains("05/10/2026 Cartao credito Nubank em 10x: R$ 1.200,00 - mercado", text);
+        Assert.Contains("02/10/2026 salario: R$ 3.000,00", text);
+    }
 }
 
 file static class TestDb

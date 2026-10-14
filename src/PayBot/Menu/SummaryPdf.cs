@@ -1,4 +1,5 @@
 using System.Text;
+using PayBot.Domain;
 
 namespace PayBot.Menu;
 
@@ -11,19 +12,12 @@ public static class SummaryPdf
         lines.Add($"Saidas: {MenuTexts.Money(report.ExpenseTotal)}");
         lines.Add($"Saldo: {MenuTexts.Money(report.IncomeTotal - report.ExpenseTotal)}");
 
-        if (report.Methods.Count > 0)
+        if (report.Expenses.Count > 0)
         {
             lines.Add("");
             lines.Add("Saidas");
-            foreach (var method in report.Methods)
-            {
-                lines.Add($"- {MenuTexts.MethodLabel(method.Method)}: {MenuTexts.Money(method.Total)}");
-                foreach (var card in method.Cards)
-                {
-                    var parcel = card.Installments is > 0 ? $" em {card.Installments}x" : "";
-                    lines.Add($"  - {card.Name}: {MenuTexts.Money(card.Amount)}{parcel}");
-                }
-            }
+            foreach (var line in report.Expenses)
+                lines.Add(ExpenseText(line));
         }
 
         if (report.Incomes.Count > 0)
@@ -38,6 +32,18 @@ public static class SummaryPdf
         }
 
         return SimplePdf.Create(lines);
+    }
+
+    private static string ExpenseText(ExpenseLine line)
+    {
+        var card = string.IsNullOrWhiteSpace(line.CardName) ? "" : $" {line.CardName.Trim()}";
+        var billing = line.Installments is > 0
+            ? $" em {line.Installments}x"
+            : line.IsFixed && line.Method is PaymentMethod.CreditCard or PaymentMethod.DebitCard
+                ? " fixo"
+                : "";
+        var description = string.IsNullOrWhiteSpace(line.Description) ? "" : $" - {line.Description.Trim()}";
+        return $"- {MenuTexts.FormatDate(line.Date)} {MenuTexts.MethodLabel(line.Method)}{card}{billing}: {MenuTexts.Money(line.Amount)}{description}";
     }
 }
 
