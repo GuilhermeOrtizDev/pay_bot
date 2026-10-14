@@ -207,7 +207,8 @@ public sealed class InboundProcessor(
     private static string FailureReply(MenuStep step) => step switch
     {
         MenuStep.AwaitingChargeMonth or MenuStep.AwaitingIncomeMonth => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskChargeMonth,
-        MenuStep.AwaitingDateRange or MenuStep.AwaitingDeleteDateRange => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskPeriod,
+        MenuStep.AwaitingDateRange => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskMonthPeriod,
+        MenuStep.AwaitingDeleteDateRange => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskPeriod,
         MenuStep.AwaitingAmount or MenuStep.AwaitingIncomeAmount => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskAmount,
         MenuStep.AwaitingExpenseDescription or MenuStep.AwaitingIncomeDescription => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskDescription,
         MenuStep.AwaitingInstallments => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskInstallments,

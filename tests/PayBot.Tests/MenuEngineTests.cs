@@ -21,7 +21,8 @@ public class MenuEngineTests
 
         var summary = Act("3", MenuStep.Main);
         Assert.Equal(MenuStep.SummaryMenu, summary.NextStep);
-        Assert.Contains("4 - Filtrar data", summary.Reply);
+        Assert.Contains("2 - Resumo do proximo mes", summary.Reply);
+        Assert.Contains("5 - Filtrar data", summary.Reply);
         Assert.DoesNotContain("5 - Remover", summary.Reply);
 
         var remove = Act("4", MenuStep.Main);
@@ -279,27 +280,38 @@ public class MenuEngineTests
         Assert.True(asPdf.AsPdf);
         Assert.Equal(month.Draft.SummaryTitle, asPdf.Summary!.Title);
 
-        var year = Act("2", MenuStep.SummaryMenu);
+        var nextMonth = Act("2", MenuStep.SummaryMenu);
+        Assert.Equal(new DateOnly(2026, 11, 1), nextMonth.Draft.SummaryFrom);
+        Assert.Equal(new DateOnly(2026, 11, 30), nextMonth.Draft.SummaryTo);
+
+        var year = Act("3", MenuStep.SummaryMenu);
         Assert.Equal(new DateOnly(2026, 1, 1), year.Draft.SummaryFrom);
         Assert.Equal(new DateOnly(2026, 12, 31), year.Draft.SummaryTo);
 
-        var total = Act("3", MenuStep.SummaryMenu);
+        var total = Act("4", MenuStep.SummaryMenu);
         Assert.Null(total.Draft.SummaryFrom);
         Assert.Null(total.Draft.SummaryTo);
         Assert.Equal("Resumo total", total.Draft.SummaryTitle);
 
-        var ask = Act("4", MenuStep.SummaryMenu);
+        var ask = Act("5", MenuStep.SummaryMenu);
         Assert.Equal(MenuStep.AwaitingDateRange, ask.NextStep);
 
-        var range = Act("10/05/2026 - 20/05/2026", ask.NextStep);
+        var single = Act("01/2025", ask.NextStep);
+        Assert.Equal(MenuStep.AwaitingSummaryOutput, single.NextStep);
+        Assert.Equal(new DateOnly(2025, 1, 1), single.Draft.SummaryFrom);
+        Assert.Equal(new DateOnly(2025, 1, 31), single.Draft.SummaryTo);
+        Assert.Equal("Resumo de 01/2025", single.Draft.SummaryTitle);
+
+        var range = Act("01/2025 - 02/2025", ask.NextStep);
         Assert.Equal(MenuStep.AwaitingSummaryOutput, range.NextStep);
-        Assert.Equal(new DateOnly(2026, 5, 10), range.Draft.SummaryFrom);
-        Assert.Equal(new DateOnly(2026, 5, 20), range.Draft.SummaryTo);
+        Assert.Equal(new DateOnly(2025, 1, 1), range.Draft.SummaryFrom);
+        Assert.Equal(new DateOnly(2025, 2, 28), range.Draft.SummaryTo);
+        Assert.Equal("Resumo de 01/2025 a 02/2025", range.Draft.SummaryTitle);
 
         var invalid = Act("ontem", MenuStep.AwaitingDateRange);
         Assert.Equal(MenuStep.AwaitingDateRange, invalid.NextStep);
         Assert.Null(invalid.Summary);
-        Assert.Contains("Periodo invalido", invalid.Reply);
+        Assert.Contains("Mes invalido", invalid.Reply);
 
     }
 

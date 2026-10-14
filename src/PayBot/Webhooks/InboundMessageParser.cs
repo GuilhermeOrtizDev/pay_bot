@@ -36,6 +36,7 @@ public static class BotEcho
         "Informe a descricao",
         "Informe o nome do cartao",
         "Informe o periodo",
+        "Informe o mes",
         "A partir de qual mes",
         "Mes invalido",
         "Nao consegui registrar",

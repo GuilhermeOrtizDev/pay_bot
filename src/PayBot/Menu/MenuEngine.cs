@@ -267,9 +267,10 @@ public static class MenuEngine
     private static MenuTurn OnSummary(string text, DateOnly today) => text switch
     {
         "1" => Period(StartOfMonth(today), EndOfMonth(today)),
-        "2" => Period(new DateOnly(today.Year, 1, 1), new DateOnly(today.Year, 12, 31)),
-        "3" => AskFormat(new SummaryQuery(null, null, "Resumo total")),
-        "4" => Stay(MenuStep.AwaitingDateRange, new SessionDraft(), MenuTexts.AskPeriod),
+        "2" => Period(StartOfMonth(today.AddMonths(1)), EndOfMonth(today.AddMonths(1))),
+        "3" => Period(new DateOnly(today.Year, 1, 1), new DateOnly(today.Year, 12, 31)),
+        "4" => AskFormat(new SummaryQuery(null, null, "Resumo total")),
+        "5" => Stay(MenuStep.AwaitingDateRange, new SessionDraft(), MenuTexts.AskMonthPeriod),
         _ => Stay(MenuStep.SummaryMenu, new SessionDraft(), MenuTexts.Summary)
     };
 
@@ -310,10 +311,13 @@ public static class MenuEngine
 
     private static MenuTurn OnDateRange(string text)
     {
-        if (!DateRangeParser.TryParse(text, out var from, out var to))
-            return Stay(MenuStep.AwaitingDateRange, new SessionDraft(), MenuTexts.InvalidPeriod);
+        if (!DateRangeParser.TryParseMonths(text, out var from, out var to))
+            return Stay(MenuStep.AwaitingDateRange, new SessionDraft(), MenuTexts.InvalidMonthPeriod);
 
-        return Period(from, to);
+        var fromLabel = from.ToString("MM/yyyy", CultureInfo.InvariantCulture);
+        var toLabel = to.ToString("MM/yyyy", CultureInfo.InvariantCulture);
+        var title = fromLabel == toLabel ? $"Resumo de {fromLabel}" : $"Resumo de {fromLabel} a {toLabel}";
+        return AskFormat(new SummaryQuery(from, to, title));
     }
 
     private static MenuTurn OnSummaryOutput(string text, SessionDraft draft)

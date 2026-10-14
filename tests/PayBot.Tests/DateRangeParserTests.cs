@@ -28,4 +28,25 @@ public class DateRangeParserTests
     {
         Assert.False(DateRangeParser.TryParse(text, out _, out _));
     }
+
+    [Fact]
+    public void Parses_one_month_or_a_month_range()
+    {
+        Assert.True(DateRangeParser.TryParseMonths("01/2025", out var from, out var to));
+        Assert.Equal(new DateOnly(2025, 1, 1), from);
+        Assert.Equal(new DateOnly(2025, 1, 31), to);
+
+        Assert.True(DateRangeParser.TryParseMonths("1/2024 - 02/2024", out from, out to));
+        Assert.Equal(new DateOnly(2024, 1, 1), from);
+        Assert.Equal(new DateOnly(2024, 2, 29), to);
+    }
+
+    [Theory]
+    [InlineData("02/2025 - 01/2025")]
+    [InlineData("10/05/2026")]
+    [InlineData("maio")]
+    public void Rejects_invalid_months(string text)
+    {
+        Assert.False(DateRangeParser.TryParseMonths(text, out _, out _));
+    }
 }
