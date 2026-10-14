@@ -13,7 +13,11 @@ public static class MenuTexts
         2 - Registrar entrada
         3 - Resumo
         4 - Remover
+        5 - Desativar bot
         """;
+
+    public const string Paused = "Bot desativado. Para ativar, envie: ativar bot";
+    public const string Resumed = "Bot ativado.";
 
     public const string Expense = """
         Registrar gasto
@@ -32,7 +36,7 @@ public static class MenuTexts
         1 - Resumo do mes
         2 - Resumo do ano
         3 - Resumo total
-        4 - Filtrar data, ex: 10/05/2026 - 20/05/2026
+        4 - Filtrar data
         """;
 
     public const string CreditCharge = """

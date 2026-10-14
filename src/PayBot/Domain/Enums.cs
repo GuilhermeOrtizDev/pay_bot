@@ -49,5 +49,6 @@ public enum MenuStep
     AwaitingDeleteChoice = 15,
     AwaitingSummaryOutput = 16,
     AwaitingChargeMonth = 17,
-    AwaitingIncomeMonth = 18
+    AwaitingIncomeMonth = 18,
+    Paused = 19
 }

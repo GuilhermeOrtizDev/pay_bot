@@ -27,6 +27,27 @@ public class MenuEngineTests
         var remove = Act("4", MenuStep.Main);
         Assert.Equal(MenuStep.RemoveMenu, remove.NextStep);
         Assert.Contains("1 - Ultimos 10 registros", remove.Reply);
+
+        var paused = Act("5", MenuStep.Main);
+        Assert.Equal(MenuStep.Paused, paused.NextStep);
+        Assert.Contains("ativar bot", paused.Reply);
+    }
+
+    [Fact]
+    public void Paused_bot_answers_only_to_ativar_bot()
+    {
+        var ignored = Act("1", MenuStep.Paused);
+        Assert.Equal(MenuStep.Paused, ignored.NextStep);
+        Assert.Equal("", ignored.Reply);
+
+        var zero = Act("0", MenuStep.Paused, new SessionDraft { Amount = 10 });
+        Assert.Equal(MenuStep.Paused, zero.NextStep);
+        Assert.Equal("", zero.Reply);
+
+        var resumed = Act("Ativar Bot", MenuStep.Paused);
+        Assert.Equal(MenuStep.Main, resumed.NextStep);
+        Assert.Contains("Bot ativado.", resumed.Reply);
+        Assert.Contains("5 - Desativar bot", resumed.Reply);
     }
 
     [Fact]

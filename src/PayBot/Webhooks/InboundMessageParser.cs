@@ -39,6 +39,8 @@ public static class BotEcho
         "A partir de qual mes",
         "Mes invalido",
         "Nao consegui registrar",
+        "Bot desativado",
+        "Bot ativado",
         "Numero de parcelas",
         "Valor invalido",
         "Numero de parcelas invalido",

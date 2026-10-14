@@ -15,6 +15,9 @@ public static class MenuEngine
         var draft = current.Clone();
         var text = (rawText ?? "").Trim();
 
+        if (step == MenuStep.Paused)
+            return text.Equals("ativar bot", StringComparison.OrdinalIgnoreCase) ? Resume() : StayPaused();
+
         if (text == "0" && step != MenuStep.Main)
             return OpenMain();
 
@@ -49,6 +52,7 @@ public static class MenuEngine
         "2" => new MenuTurn(MenuTexts.AskAmount, MenuStep.AwaitingIncomeAmount, new SessionDraft(), null, null, null),
         "3" => new MenuTurn(MenuTexts.Summary, MenuStep.SummaryMenu, new SessionDraft(), null, null, null),
         "4" => new MenuTurn(MenuTexts.Remove, MenuStep.RemoveMenu, new SessionDraft(), null, null, null),
+        "5" => Pause(),
         _ => OpenMain()
     };
 
@@ -429,6 +433,15 @@ public static class MenuEngine
 
     private static MenuTurn OpenMain() =>
         new(MenuTexts.Main, MenuStep.Main, new SessionDraft(), null, null, null);
+
+    private static MenuTurn Pause() =>
+        new(MenuTexts.Paused, MenuStep.Paused, new SessionDraft(), null, null, null);
+
+    private static MenuTurn StayPaused() =>
+        new("", MenuStep.Paused, new SessionDraft(), null, null, null);
+
+    private static MenuTurn Resume() =>
+        new(MenuTexts.Resumed + "\n\n" + MenuTexts.Main, MenuStep.Main, new SessionDraft(), null, null, null);
 
     private static MenuTurn Stay(MenuStep step, SessionDraft draft, string reply) =>
         new(reply, step, draft, null, null, null);
