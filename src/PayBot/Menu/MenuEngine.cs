@@ -23,7 +23,7 @@ public static class MenuEngine
 
         return step switch
         {
-            MenuStep.Main => OnMain(text),
+            MenuStep.Main => OnMain(text, cards),
             MenuStep.ExpenseMenu => OnExpense(text, draft),
             MenuStep.AwaitingCreditCharge => OnCreditCharge(text, draft),
             MenuStep.AwaitingDebitCharge => OnDebitCharge(text, draft),
@@ -36,6 +36,9 @@ public static class MenuEngine
             MenuStep.AwaitingIncomeAmount => OnIncomeAmount(text, draft),
             MenuStep.AwaitingIncomeDescription => OnIncomeDescription(text, draft),
             MenuStep.AwaitingIncomeMonth => OnIncomeMonth(text, draft),
+            MenuStep.AwaitingBulkFix => OnBulkFix(text, draft, cards),
+            MenuStep.AwaitingBulkEntry => OnBulkEntry(text, cards),
+            MenuStep.ExampleMenu => OnExamples(text, cards),
             MenuStep.SummaryMenu => OnSummary(text, today),
             MenuStep.AwaitingSummaryOutput => OnSummaryOutput(text, draft),
             MenuStep.AwaitingDateRange => OnDateRange(text),
@@ -46,15 +49,57 @@ public static class MenuEngine
         };
     }
 
-    private static MenuTurn OnMain(string text) => text switch
+    private static MenuTurn OnMain(string text, IReadOnlyList<KnownCard> cards)
     {
-        "1" => new MenuTurn(MenuTexts.Expense, MenuStep.ExpenseMenu, new SessionDraft(), null, null, null),
-        "2" => new MenuTurn(MenuTexts.AskAmount, MenuStep.AwaitingIncomeAmount, new SessionDraft(), null, null, null),
-        "3" => new MenuTurn(MenuTexts.Summary, MenuStep.SummaryMenu, new SessionDraft(), null, null, null),
-        "4" => new MenuTurn(MenuTexts.Remove, MenuStep.RemoveMenu, new SessionDraft(), null, null, null),
-        "5" => Pause(),
-        _ => OpenMain()
-    };
+        if (BulkEntry.IsBlock(text))
+            return CompleteBulk(BulkEntry.ReadBlock(text, cards));
+
+        return text switch
+        {
+            "1" => new MenuTurn(MenuTexts.Expense, MenuStep.ExpenseMenu, new SessionDraft(), null, null, null),
+            "2" => new MenuTurn(MenuTexts.AskAmount, MenuStep.AwaitingIncomeAmount, new SessionDraft(), null, null, null),
+            "3" => new MenuTurn(MenuTexts.Summary, MenuStep.SummaryMenu, new SessionDraft(), null, null, null),
+            "4" => new MenuTurn(MenuTexts.Remove, MenuStep.RemoveMenu, new SessionDraft(), null, null, null),
+            "5" => Pause(),
+            "6" => Stay(MenuStep.AwaitingBulkEntry, new SessionDraft(), MenuTexts.BulkPrompt),
+            "7" => Stay(MenuStep.ExampleMenu, new SessionDraft(), MenuTexts.Examples),
+            _ => OpenMain()
+        };
+    }
+
+    private static MenuTurn OnBulkEntry(string text, IReadOnlyList<KnownCard> cards)
+    {
+        if (!BulkEntry.IsBlock(text))
+            return Stay(MenuStep.AwaitingBulkEntry, new SessionDraft(), MenuTexts.BulkPrompt);
+        return CompleteBulk(BulkEntry.ReadBlock(text, cards));
+    }
+
+    private static MenuTurn OnExamples(string text, IReadOnlyList<KnownCard> cards)
+    {
+        if (BulkEntry.IsBlock(text))
+            return CompleteBulk(BulkEntry.ReadBlock(text, cards));
+
+        var sample = MenuTexts.Example(text);
+        if (sample is null)
+            return Stay(MenuStep.ExampleMenu, new SessionDraft(), MenuTexts.Examples);
+
+        return Stay(MenuStep.ExampleMenu, new SessionDraft(), "Exemplo\n\n" + sample + "\n\n" + MenuTexts.Examples);
+    }
+
+    private static MenuTurn OnBulkFix(string text, SessionDraft draft, IReadOnlyList<KnownCard> cards)
+    {
+        var read = BulkEntry.IsBlock(text)
+            ? BulkEntry.ReadBlock(text, cards)
+            : BulkEntry.ReadPatch(text, draft, cards);
+        return CompleteBulk(read);
+    }
+
+    private static MenuTurn CompleteBulk(BulkEntry.Read read)
+    {
+        if (read.Problems.Count > 0)
+            return Stay(MenuStep.AwaitingBulkFix, read.Draft, MenuTexts.BulkProblems(read.Problems));
+        return read.Draft.IsBulkIncome ? FinishIncome(read.Draft) : FinishExpense(read.Draft);
+    }
 
     private static MenuTurn OnExpense(string text, SessionDraft draft)
     {
@@ -216,16 +261,8 @@ public static class MenuEngine
     private static bool NeedsChargeMonth(PaymentMethod? method) =>
         method is PaymentMethod.CreditCard or PaymentMethod.Fixed or PaymentMethod.Other;
 
-    private static bool TryParseMonth(string text, out DateOnly month)
-    {
-        month = default;
-        var formats = new[] { "MM/yyyy", "M/yyyy" };
-        if (!DateOnly.TryParseExact(text.Trim(), formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
-            return false;
-
-        month = new DateOnly(parsed.Year, parsed.Month, 1);
-        return true;
-    }
+    private static bool TryParseMonth(string text, out DateOnly month) =>
+        DateRangeParser.TryParseMonth(text, out month);
 
     private static MenuTurn OnIncomeAmount(string text, SessionDraft draft)
     {
@@ -257,8 +294,14 @@ public static class MenuEngine
             return Stay(MenuStep.AwaitingIncomeMonth, draft, MenuTexts.InvalidChargeMonth);
 
         draft.ChargeMonth = month;
-        var description = draft.Description.Trim();
-        var income = new PendingIncome(draft.Amount.Value, description, month);
+        return FinishIncome(draft);
+    }
+
+    private static MenuTurn FinishIncome(SessionDraft draft)
+    {
+        var description = draft.Description!.Trim();
+        var month = draft.ChargeMonth!.Value;
+        var income = new PendingIncome(draft.Amount!.Value, description, month);
         var start = month.ToString("MM/yyyy", CultureInfo.InvariantCulture);
         var reply = $"Entrada registrada: {MenuTexts.Money(income.Amount)} a partir de {start} - {description}\n\n{MenuTexts.Main}";
         return new MenuTurn(reply, MenuStep.Main, new SessionDraft(), null, income, null);

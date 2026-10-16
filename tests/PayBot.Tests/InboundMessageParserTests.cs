@@ -50,7 +50,12 @@ public class InboundMessageParserTests
         Assert.Equal(Group, addressed.RemoteJid);
         Assert.True(BotEcho.IsEcho("\u200B1 - Registrar gasto"));
         Assert.True(BotEcho.IsEcho("Gasto registrado: Pix R$ 10,00"));
+        Assert.True(BotEcho.IsEcho("Registrar em texto\nEnvie o texto do lancamento."));
+        Assert.True(BotEcho.IsEcho("Exemplo\ngasto\ntipo: pix"));
+        Assert.True(BotEcho.IsEcho("Exemplos\n0 - Voltar Menu Inicial"));
+        Assert.True(BotEcho.IsEcho("Faltou ou esta invalido:\n- mes (ex: 10/2026)"));
         Assert.False(BotEcho.IsEcho("1"));
+        Assert.False(BotEcho.IsEcho("gasto\ntipo: pix\nvalor: 32,50\ndescricao: mercado"));
     }
 
     [Fact]

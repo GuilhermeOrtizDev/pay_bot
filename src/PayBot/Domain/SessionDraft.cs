@@ -15,6 +15,7 @@ public sealed class SessionDraft
     public string? SummaryTitle { get; set; }
     public string? Description { get; set; }
     public DateOnly? ChargeMonth { get; set; }
+    public bool IsBulkIncome { get; set; }
 
     public SessionDraft Clone() => new()
     {
@@ -30,6 +31,7 @@ public sealed class SessionDraft
         SummaryTo = SummaryTo,
         SummaryTitle = SummaryTitle,
         Description = Description,
-        ChargeMonth = ChargeMonth
+        ChargeMonth = ChargeMonth,
+        IsBulkIncome = IsBulkIncome
     };
 }

@@ -14,6 +14,29 @@ public static class MenuTexts
         3 - Resumo
         4 - Remover
         5 - Desativar bot
+        6 - Registrar em texto
+        7 - Exemplos
+        """;
+
+    public const string BulkPrompt = """
+        Registrar em texto
+        Envie o texto do lancamento.
+        0 - Voltar Menu Inicial
+        """;
+
+    public const string Examples = """
+        Exemplos
+        0 - Voltar Menu Inicial
+        1 - Pix
+        2 - Cartao credito em parcelas
+        3 - Cartao credito a vista
+        4 - Cartao credito fixo
+        5 - Cartao debito a vista
+        6 - Cartao debito fixo
+        7 - Retirada de caixa
+        8 - Despesa fixa
+        9 - Outros
+        10 - Entrada
         """;
 
     public const string Paused = "Bot desativado. Para ativar, envie: ativar bot";
@@ -130,4 +153,119 @@ public static class MenuTexts
 
     public static string FormatDate(DateOnly date) =>
         date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+
+    public static string? Example(string option) => option switch
+    {
+        "1" => """
+            gasto
+            tipo: pix
+            valor: 32,50
+            descricao: mercado
+            """,
+        "2" => """
+            gasto
+            tipo: cartao credito
+            cobranca: parcelas
+            parcelas: 10
+            valor: 1200,00
+            cartao: Nubank
+            descricao: notebook
+            mes: 10/2026
+            """,
+        "3" => """
+            gasto
+            tipo: cartao credito
+            cobranca: a vista
+            valor: 89,90
+            cartao: Nubank
+            descricao: farmacia
+            mes: 10/2026
+            """,
+        "4" => """
+            gasto
+            tipo: cartao credito
+            cobranca: fixo
+            valor: 49,90
+            cartao: Nubank
+            descricao: netflix
+            mes: 10/2026
+            """,
+        "5" => """
+            gasto
+            tipo: cartao debito
+            cobranca: a vista
+            valor: 45,00
+            cartao: Inter
+            descricao: almoco
+            """,
+        "6" => """
+            gasto
+            tipo: cartao debito
+            cobranca: fixo
+            valor: 19,90
+            cartao: Inter
+            descricao: spotify
+            """,
+        "7" => """
+            gasto
+            tipo: retirada
+            valor: 200,00
+            descricao: caixa
+            """,
+        "8" => """
+            gasto
+            tipo: despesa fixa
+            valor: 1800,00
+            descricao: aluguel
+            mes: 10/2026
+            """,
+        "9" => """
+            gasto
+            tipo: outros
+            valor: 15,00
+            descricao: gorjeta
+            mes: 10/2026
+            """,
+        "10" => """
+            entrada
+            valor: 5000,00
+            descricao: salario
+            mes: 10/2026
+            """,
+        _ => null
+    };
+
+    public static string BulkProblems(IReadOnlyList<string> fields)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("Faltou ou esta invalido:");
+        foreach (var field in fields)
+            builder.AppendLine($"- {field} (ex: {BulkExample(field)})");
+        builder.AppendLine();
+        builder.AppendLine(fields.Count == 1
+            ? "Reenvie o texto completo, ou so a linha:"
+            : "Reenvie o texto completo, ou as linhas:");
+        for (var i = 0; i < fields.Count; i++)
+        {
+            var line = $"{fields[i]}: {BulkExample(fields[i])}";
+            if (i == fields.Count - 1)
+                builder.Append(line);
+            else
+                builder.AppendLine(line);
+        }
+
+        return builder.ToString();
+    }
+
+    private static string BulkExample(string field) => field switch
+    {
+        "tipo" => "pix",
+        "cobranca" => "parcelas",
+        "parcelas" => "10",
+        "valor" => "32,50",
+        "cartao" => "Nubank",
+        "descricao" => "mercado",
+        "mes" => "10/2026",
+        _ => ""
+    };
 }

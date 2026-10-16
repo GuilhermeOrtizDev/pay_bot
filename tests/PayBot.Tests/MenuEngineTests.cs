@@ -341,6 +341,305 @@ public class MenuEngineTests
         Assert.Contains("Id invalido", invalid.Reply);
     }
 
+    [Fact]
+    public void Text_entry_waits_for_the_block_and_examples_are_selectable()
+    {
+        var entry = Act("6", MenuStep.Main);
+        Assert.Equal(MenuStep.AwaitingBulkEntry, entry.NextStep);
+        Assert.Contains("Envie o texto do lancamento.", entry.Reply);
+        Assert.Null(entry.Expense);
+
+        var repeated = Act("oi", entry.NextStep);
+        Assert.Equal(MenuStep.AwaitingBulkEntry, repeated.NextStep);
+        Assert.Null(repeated.Expense);
+
+        var saved = Act("""
+            gasto
+            tipo: pix
+            valor: 32,50
+            descricao: mercado
+            """, entry.NextStep);
+        Assert.Equal(MenuStep.Main, saved.NextStep);
+        Assert.Equal(32.50m, saved.Expense!.Amount);
+        Assert.Equal("mercado", saved.Expense.Description);
+
+        var examples = Act("7", MenuStep.Main);
+        Assert.Equal(MenuStep.ExampleMenu, examples.NextStep);
+        Assert.Contains("1 - Pix", examples.Reply);
+        Assert.Contains("2 - Cartao credito em parcelas", examples.Reply);
+        Assert.Contains("6 - Cartao debito fixo", examples.Reply);
+        Assert.Contains("10 - Entrada", examples.Reply);
+
+        var invalid = Act("11", examples.NextStep);
+        Assert.Equal(MenuStep.ExampleMenu, invalid.NextStep);
+        Assert.Contains("10 - Entrada", invalid.Reply);
+
+        var pix = Act("1", examples.NextStep);
+        Assert.Equal(MenuStep.ExampleMenu, pix.NextStep);
+        Assert.Contains("tipo: pix", pix.Reply);
+        Assert.Contains("valor: 32,50", pix.Reply);
+        Assert.Contains("descricao: mercado", pix.Reply);
+        Assert.Null(pix.Expense);
+
+        var income = Act("10", pix.NextStep);
+        Assert.Contains("entrada", income.Reply);
+        Assert.Contains("descricao: salario", income.Reply);
+        Assert.Contains("mes: 10/2026", income.Reply);
+        Assert.Equal(MenuStep.ExampleMenu, income.NextStep);
+
+        var back = Act("0", income.NextStep);
+        Assert.Equal(MenuStep.Main, back.NextStep);
+        Assert.Contains("6 - Registrar em texto", back.Reply);
+        Assert.Contains("7 - Exemplos", back.Reply);
+    }
+
+    [Theory]
+    [InlineData("2", "cobranca: parcelas")]
+    [InlineData("3", "cobranca: a vista")]
+    [InlineData("4", "cobranca: fixo")]
+    [InlineData("5", "tipo: cartao debito")]
+    [InlineData("6", "descricao: spotify")]
+    [InlineData("7", "tipo: retirada")]
+    [InlineData("8", "tipo: despesa fixa")]
+    [InlineData("9", "tipo: outros")]
+    public void Each_example_returns_a_filled_sample(string option, string snippet)
+    {
+        var turn = Act(option, MenuStep.ExampleMenu);
+        Assert.Equal(MenuStep.ExampleMenu, turn.NextStep);
+        Assert.Contains(snippet, turn.Reply);
+        Assert.Contains("1 - Pix", turn.Reply);
+        Assert.Null(turn.Expense);
+        Assert.Null(turn.Income);
+    }
+
+    [Fact]
+    public void Bulk_pix_saves_in_one_message()
+    {
+        var saved = Act("""
+            gasto
+            descricao: mercado
+            valor: 32,50
+            tipo: pix
+            """, MenuStep.Main);
+
+        Assert.Equal(MenuStep.Main, saved.NextStep);
+        Assert.Equal(PaymentMethod.Pix, saved.Expense!.Method);
+        Assert.Equal(32.50m, saved.Expense.Amount);
+        Assert.Equal("mercado", saved.Expense.Description);
+        Assert.Null(saved.Expense.ChargeMonth);
+        Assert.Null(saved.Expense.CardId);
+        Assert.False(saved.Expense.IsFixed);
+        Assert.Contains("Pix", saved.Reply);
+        Assert.Contains("R$ 32,50", saved.Reply);
+    }
+
+    [Fact]
+    public void Bulk_credit_installments_reuse_an_existing_card()
+    {
+        var saved = Act("""
+            gasto
+            tipo: cartão crédito
+            cobranca: parcelas
+            parcelas: 10
+            valor: 1.200,00
+            cartao: nubank
+            descricao: notebook
+            mes: 11/2026
+            """, MenuStep.Main, cards: Cards());
+
+        Assert.Equal(NubankId, saved.Expense!.CardId);
+        Assert.Equal("Nubank", saved.Expense.CardName);
+        Assert.False(saved.Expense.CreateCard);
+        Assert.Equal(10, saved.Expense.Installments);
+        Assert.Equal(1200m, saved.Expense.Amount);
+        Assert.Equal(new DateOnly(2026, 11, 1), saved.Expense.ChargeMonth);
+        Assert.False(saved.Expense.IsFixed);
+        Assert.Contains("em 10x", saved.Reply);
+        Assert.Contains("a partir de 11/2026", saved.Reply);
+    }
+
+    [Fact]
+    public void Bulk_credit_accepts_accents_and_creates_a_new_card()
+    {
+        var saved = Act("""
+            gasto
+            tipo: cartão de crédito
+            cobrança: à vista
+            valor: 89,90
+            cartão: C6
+            descrição: farmácia
+            mês: 10/2026
+            """, MenuStep.Main, cards: Cards());
+
+        Assert.True(saved.Expense!.CreateCard);
+        Assert.Null(saved.Expense.CardId);
+        Assert.Equal("C6", saved.Expense.CardName);
+        Assert.Equal("farmácia", saved.Expense.Description);
+        Assert.Null(saved.Expense.Installments);
+        Assert.False(saved.Expense.IsFixed);
+        Assert.Equal(new DateOnly(2026, 10, 1), saved.Expense.ChargeMonth);
+        Assert.Contains("a vista", saved.Reply);
+    }
+
+    [Theory]
+    [InlineData("a vista", false)]
+    [InlineData("fixo", true)]
+    public void Bulk_debit_skips_the_month(string billing, bool isFixed)
+    {
+        var saved = Act($"""
+            gasto
+            tipo: cartao debito
+            cobranca: {billing}
+            valor: 45,00
+            cartao: Inter
+            descricao: almoco
+            mes: 10/2026
+            """, MenuStep.Main, cards: Cards());
+
+        Assert.Equal(InterId, saved.Expense!.CardId);
+        Assert.Equal(isFixed, saved.Expense.IsFixed);
+        Assert.Null(saved.Expense.ChargeMonth);
+        Assert.DoesNotContain("a partir de", saved.Reply);
+    }
+
+    [Fact]
+    public void Bulk_fixed_expense_and_income_keep_the_month()
+    {
+        var expense = Act("""
+            gasto
+            tipo: despesa fixa
+            valor: 1800
+            descricao: aluguel
+            mes: 01/2027
+            """, MenuStep.Main);
+        Assert.Equal(PaymentMethod.Fixed, expense.Expense!.Method);
+        Assert.Equal(new DateOnly(2027, 1, 1), expense.Expense.ChargeMonth);
+        Assert.Contains("a partir de 01/2027", expense.Reply);
+
+        var income = Act("""
+            entrada
+            valor: 5.000,00
+            descricao: salario
+            mes: 10/2026
+            """, MenuStep.Main);
+        Assert.Null(income.Expense);
+        Assert.Equal(5000m, income.Income!.Amount);
+        Assert.Equal("salario", income.Income.Description);
+        Assert.Equal(new DateOnly(2026, 10, 1), income.Income.ChargeMonth);
+    }
+
+    [Fact]
+    public void Bulk_reports_missing_fields_and_accepts_one_correction_line()
+    {
+        var missing = Act("""
+            gasto
+            tipo: cartao credito
+            cobranca: parcelas
+            parcelas: 10
+            valor: 1200
+            cartao: Nubank
+            descricao: notebook
+            """, MenuStep.Main, cards: Cards());
+
+        Assert.Equal(MenuStep.AwaitingBulkFix, missing.NextStep);
+        Assert.Null(missing.Expense);
+        Assert.Contains("Faltou ou esta invalido:", missing.Reply);
+        Assert.Contains("- mes (ex: 10/2026)", missing.Reply);
+        Assert.Contains("ou so a linha:", missing.Reply);
+        Assert.DoesNotContain("- tipo", missing.Reply);
+
+        var ignored = Act("oi", missing.NextStep, missing.Draft, Cards());
+        Assert.Equal(MenuStep.AwaitingBulkFix, ignored.NextStep);
+        Assert.Null(ignored.Expense);
+        Assert.Equal(1200m, ignored.Draft.Amount);
+
+        var saved = Act("mes: 11/2026", ignored.NextStep, ignored.Draft, Cards());
+        Assert.Equal(MenuStep.Main, saved.NextStep);
+        Assert.Equal(NubankId, saved.Expense!.CardId);
+        Assert.Equal(new DateOnly(2026, 11, 1), saved.Expense.ChargeMonth);
+    }
+
+    [Fact]
+    public void Bulk_invalid_values_can_be_replaced_by_a_new_block()
+    {
+        var invalid = Act("""
+            gasto
+            tipo: cartao debito
+            cobranca: parcelas
+            valor: 0
+            descricao: almoco
+            """, MenuStep.Main, cards: Cards());
+
+        Assert.Equal(MenuStep.AwaitingBulkFix, invalid.NextStep);
+        Assert.Contains("- cobranca", invalid.Reply);
+        Assert.Contains("- valor", invalid.Reply);
+        Assert.Contains("- cartao", invalid.Reply);
+        Assert.Null(invalid.Expense);
+
+        var replaced = Act("""
+            entrada
+            valor: 80
+            descricao: bonus
+            mes: 02/2027
+            """, invalid.NextStep, invalid.Draft);
+
+        Assert.Null(replaced.Expense);
+        Assert.Equal(80m, replaced.Income!.Amount);
+        Assert.Equal("bonus", replaced.Income.Description);
+    }
+
+    [Fact]
+    public void Bulk_fix_zero_discards_the_draft()
+    {
+        var missing = Act("entrada\nvalor: 10", MenuStep.Main);
+        var back = Act("0", missing.NextStep, missing.Draft);
+
+        Assert.Equal(MenuStep.Main, back.NextStep);
+        Assert.Null(back.Draft.Amount);
+        Assert.Null(back.Income);
+    }
+
+    [Fact]
+    public void Bulk_text_does_not_interrupt_the_step_menu_or_a_paused_bot()
+    {
+        var block = """
+            gasto
+            tipo: pix
+            valor: 10
+            descricao: pao
+            """;
+
+        var menu = Act(block, MenuStep.ExpenseMenu);
+        Assert.Equal(MenuStep.ExpenseMenu, menu.NextStep);
+        Assert.Null(menu.Expense);
+
+        var paused = Act(block, MenuStep.Paused);
+        Assert.Equal(MenuStep.Paused, paused.NextStep);
+        Assert.Equal("", paused.Reply);
+    }
+
+    [Fact]
+    public void Bulk_message_uses_only_the_first_block()
+    {
+        var saved = Act("""
+            gasto
+            tipo: pix
+            valor: 10
+            descricao: pao
+
+            entrada
+            valor: 99
+            descricao: salario
+            mes: 10/2026
+            """, MenuStep.Main);
+
+        Assert.NotNull(saved.Expense);
+        Assert.Null(saved.Income);
+        Assert.Equal(10m, saved.Expense.Amount);
+        Assert.Equal("pao", saved.Expense.Description);
+        Assert.Null(saved.Expense.ChargeMonth);
+    }
+
     private static MenuTurn Act(
         string text,
         MenuStep step,

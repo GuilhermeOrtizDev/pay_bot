@@ -55,7 +55,10 @@ public static class BotEcho
         "Registro removido:",
         "Nenhum registro",
         "Id invalido",
-        "Registro nao encontrado"
+        "Registro nao encontrado",
+        "Registrar em texto",
+        "Exemplo",
+        "Faltou ou esta invalido"
     ];
 
     public static bool IsEcho(string text)
