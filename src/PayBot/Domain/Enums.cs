@@ -50,5 +50,8 @@ public enum MenuStep
     AwaitingSummaryOutput = 16,
     AwaitingChargeMonth = 17,
     AwaitingIncomeMonth = 18,
-    Paused = 19
+    Paused = 19,
+    AwaitingBulkFix = 20,
+    AwaitingBulkEntry = 21,
+    ExampleMenu = 22
 }

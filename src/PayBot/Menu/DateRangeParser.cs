@@ -32,11 +32,11 @@ public static partial class DateRangeParser
             return false;
 
         var parts = Splitter().Split(text.Trim());
-        if (parts.Length is not (1 or 2) || !TryMonth(parts[0], out var start))
+        if (parts.Length is not (1 or 2) || !TryParseMonth(parts[0], out var start))
             return false;
 
         var end = start;
-        if (parts.Length == 2 && !TryMonth(parts[1], out end))
+        if (parts.Length == 2 && !TryParseMonth(parts[1], out end))
             return false;
         if (start > end)
             return false;
@@ -46,7 +46,7 @@ public static partial class DateRangeParser
         return true;
     }
 
-    private static bool TryMonth(string text, out DateOnly month)
+    public static bool TryParseMonth(string text, out DateOnly month)
     {
         month = default;
         var formats = new[] { "MM/yyyy", "M/yyyy" };
