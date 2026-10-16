@@ -42,7 +42,7 @@ docker compose up -d paybot
 
 ## CI/CD
 
-Push na `main` (ou execucao manual do workflow) testa, gera a imagem `linux/arm64` e sobe na EC2 por SSH. Secrets do repositorio, os mesmos do microservices:
+Publicar uma release com tag `v*` (por exemplo `v1.0.0`), ou executar o workflow manualmente, testa, gera a imagem `linux/arm64` e sobe na EC2 por SSH. Push na `main` nao dispara o deploy. Secrets do repositorio, os mesmos do microservices:
 
 - `SSH_HOST`
 - `SSH_USER`

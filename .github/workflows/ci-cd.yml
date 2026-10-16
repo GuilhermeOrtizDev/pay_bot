@@ -8,13 +8,13 @@
 #   SSH_PORT          — optional (default 22)
 #
 # The server .env lives at /www/.env and is not uploaded by this workflow.
-# Trigger: push to main, or workflow_dispatch.
+# Trigger: published GitHub Release whose tag starts with v, or workflow_dispatch.
 
 name: CI/CD
 
 on:
-  push:
-    branches: [main]
+  release:
+    types: [published]
   workflow_dispatch:
 
 concurrency:
@@ -28,6 +28,7 @@ env:
 jobs:
   test:
     name: Test
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -159,7 +160,7 @@ jobs:
   cleanup-artifacts:
     name: Delete artifacts
     needs: [build, deploy]
-    if: always()
+    if: always() && (github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'v'))
     runs-on: ubuntu-latest
     permissions:
       actions: write
