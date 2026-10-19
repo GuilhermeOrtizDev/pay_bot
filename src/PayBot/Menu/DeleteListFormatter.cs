@@ -10,6 +10,13 @@ public static class DeleteListFormatter
         var builder = new StringBuilder();
         builder.AppendLine("Selecione o id para remover");
         builder.AppendLine("0 - Voltar Menu Inicial");
+        builder.Append(FormatChoices(entries));
+        return builder.ToString().TrimEnd();
+    }
+
+    public static string FormatChoices(IReadOnlyList<LedgerEntry> entries)
+    {
+        var builder = new StringBuilder();
         for (var i = 0; i < entries.Count; i++)
             builder.AppendLine($"{i + 1} - {Line(entries[i])}");
         return builder.ToString().TrimEnd();

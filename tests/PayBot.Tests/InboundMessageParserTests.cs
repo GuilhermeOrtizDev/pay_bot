@@ -59,6 +59,30 @@ public class InboundMessageParserTests
     }
 
     [Fact]
+    public void Flags_voice_notes_as_audio_and_keeps_the_raw_message()
+    {
+        var plain = """
+            {"event":"messages.upsert","data":{"key":{"id":"a1","remoteJid":"120363000000000000@g.us","fromMe":true},"message":{"audioMessage":{"mimetype":"audio/ogg; codecs=opus","ptt":true}}}}
+            """;
+        var ephemeral = """
+            {"event":"messages.upsert","data":{"key":{"id":"a2","remoteJid":"120363000000000000@g.us","fromMe":true},"message":{"ephemeralMessage":{"message":{"audioMessage":{"ptt":true}}}}}}
+            """;
+
+        var first = Assert.Single(InboundMessageParser.Parse(plain).Messages);
+        var second = Assert.Single(InboundMessageParser.Parse(ephemeral).Messages);
+
+        Assert.True(first.IsAudio);
+        Assert.Null(first.Text);
+        Assert.Contains("audioMessage", first.RawJson);
+        Assert.Contains("\"a1\"", first.RawJson);
+        Assert.True(second.IsAudio);
+
+        var text = Assert.Single(InboundMessageParser.Parse(Payload("conversation", "1", fromMe: true)).Messages);
+        Assert.False(text.IsAudio);
+        Assert.Null(text.RawJson);
+    }
+
+    [Fact]
     public void Api_key_must_match_body_or_header()
     {
         Assert.True(InboundMessageParser.ApiKeyMatches("secret", null, "secret"));

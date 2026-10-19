@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PayBot.Ai;
 using PayBot.Configuration;
 using PayBot.Data;
 using PayBot.Evolution;
@@ -14,6 +15,7 @@ var connectionString = builder.Configuration.GetConnectionString("PayBot")
 
 builder.Services.AddDbContext<PayBotDbContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddHttpClient<EvolutionClient>(client => client.Timeout = TimeSpan.FromSeconds(20));
+builder.Services.AddHttpClient<OpenAiClient>(client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddSingleton<InboundGate>();
 builder.Services.AddScoped<SummaryService>();
 builder.Services.AddScoped<InboundProcessor>();

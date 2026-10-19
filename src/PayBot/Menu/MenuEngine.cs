@@ -10,7 +10,22 @@ public static class MenuEngine
         MenuStep step,
         SessionDraft current,
         IReadOnlyList<KnownCard> cards,
-        DateOnly today)
+        DateOnly today,
+        bool aiAvailable = false)
+    {
+        var turn = Route(rawText, step, current, cards, today, aiAvailable);
+        if (aiAvailable && turn.NextStep == MenuStep.Main && turn.Reply.EndsWith(MenuTexts.Main, StringComparison.Ordinal))
+            return turn with { Reply = turn.Reply + MenuTexts.AiOption };
+        return turn;
+    }
+
+    private static MenuTurn Route(
+        string? rawText,
+        MenuStep step,
+        SessionDraft current,
+        IReadOnlyList<KnownCard> cards,
+        DateOnly today,
+        bool aiAvailable)
     {
         var draft = current.Clone();
         var text = (rawText ?? "").Trim();
@@ -23,7 +38,7 @@ public static class MenuEngine
 
         return step switch
         {
-            MenuStep.Main => OnMain(text, cards),
+            MenuStep.Main => OnMain(text, cards, aiAvailable),
             MenuStep.ExpenseMenu => OnExpense(text, draft),
             MenuStep.AwaitingCreditCharge => OnCreditCharge(text, draft),
             MenuStep.AwaitingDebitCharge => OnDebitCharge(text, draft),
@@ -49,10 +64,12 @@ public static class MenuEngine
         };
     }
 
-    private static MenuTurn OnMain(string text, IReadOnlyList<KnownCard> cards)
+    private static MenuTurn OnMain(string text, IReadOnlyList<KnownCard> cards, bool aiAvailable)
     {
         if (BulkEntry.IsBlock(text))
             return CompleteBulk(BulkEntry.ReadBlock(text, cards));
+        if (aiAvailable && text == "8")
+            return Stay(MenuStep.AiMode, new SessionDraft(), MenuTexts.AiModeOn);
 
         return text switch
         {
@@ -299,12 +316,18 @@ public static class MenuEngine
 
     private static MenuTurn FinishIncome(SessionDraft draft)
     {
-        var description = draft.Description!.Trim();
-        var month = draft.ChargeMonth!.Value;
-        var income = new PendingIncome(draft.Amount!.Value, description, month);
-        var start = month.ToString("MM/yyyy", CultureInfo.InvariantCulture);
-        var reply = $"Entrada registrada: {MenuTexts.Money(income.Amount)} a partir de {start} - {description}\n\n{MenuTexts.Main}";
-        return new MenuTurn(reply, MenuStep.Main, new SessionDraft(), null, income, null);
+        var reply = $"Entrada registrada: {IncomeLine(draft)}\n\n{MenuTexts.Main}";
+        return new MenuTurn(reply, MenuStep.Main, new SessionDraft(), null, ToIncome(draft), null);
+    }
+
+    internal static PendingIncome ToIncome(SessionDraft draft) =>
+        new(draft.Amount!.Value, draft.Description!.Trim(), draft.ChargeMonth!.Value);
+
+    internal static string IncomeLine(SessionDraft draft)
+    {
+        var income = ToIncome(draft);
+        var start = income.ChargeMonth.ToString("MM/yyyy", CultureInfo.InvariantCulture);
+        return $"{MenuTexts.Money(income.Amount)} a partir de {start} - {income.Description}";
     }
 
     private static MenuTurn OnSummary(string text, DateOnly today) => text switch
@@ -418,30 +441,37 @@ public static class MenuEngine
 
     private static MenuTurn FinishExpense(SessionDraft draft)
     {
+        var reply = $"Gasto registrado: {ExpenseLine(draft)}\n\n{MenuTexts.Main}";
+        return new MenuTurn(reply, MenuStep.Main, new SessionDraft(), ToExpense(draft), null, null);
+    }
+
+    internal static PendingExpense ToExpense(SessionDraft draft)
+    {
         var method = draft.Method!.Value;
-        var amount = draft.Amount!.Value;
-        var description = draft.Description!.Trim();
         var installments = method == PaymentMethod.CreditCard && draft.Billing == CardBilling.Installments
             ? draft.Installments
             : null;
-        var isFixed = draft.Billing == CardBilling.Fixed;
-        var expense = new PendingExpense(
+        return new PendingExpense(
             method,
-            amount,
+            draft.Amount!.Value,
             installments,
             draft.CardId,
             draft.CardName,
             draft.CreateCard,
-            description,
-            isFixed,
+            draft.Description!.Trim(),
+            draft.Billing == CardBilling.Fixed,
             draft.ChargeMonth);
-        var cardPart = string.IsNullOrWhiteSpace(draft.CardName) ? "" : $" {draft.CardName.Trim()}";
-        var billing = BillingLabel(method, draft.Billing, installments);
-        var start = draft.ChargeMonth is DateOnly month
+    }
+
+    internal static string ExpenseLine(SessionDraft draft)
+    {
+        var expense = ToExpense(draft);
+        var cardPart = string.IsNullOrWhiteSpace(expense.CardName) ? "" : $" {expense.CardName.Trim()}";
+        var billing = BillingLabel(expense.Method, draft.Billing, expense.Installments);
+        var start = expense.ChargeMonth is DateOnly month
             ? $" a partir de {month.ToString("MM/yyyy", CultureInfo.InvariantCulture)}"
             : "";
-        var reply = $"Gasto registrado: {MenuTexts.MethodLabel(method)}{cardPart} {MenuTexts.Money(amount)}{billing}{start} - {description}\n\n{MenuTexts.Main}";
-        return new MenuTurn(reply, MenuStep.Main, new SessionDraft(), expense, null, null);
+        return $"{MenuTexts.MethodLabel(expense.Method)}{cardPart} {MenuTexts.Money(expense.Amount)}{billing}{start} - {expense.Description}";
     }
 
     private static string BillingLabel(PaymentMethod method, CardBilling? billing, int? installments)

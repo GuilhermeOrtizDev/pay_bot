@@ -53,5 +53,9 @@ public enum MenuStep
     Paused = 19,
     AwaitingBulkFix = 20,
     AwaitingBulkEntry = 21,
-    ExampleMenu = 22
+    ExampleMenu = 22,
+    AiMode = 23,
+    AiAwaitingConfirm = 24,
+    AiAwaitingDeleteChoice = 25,
+    AiAwaitingDeleteConfirm = 26
 }

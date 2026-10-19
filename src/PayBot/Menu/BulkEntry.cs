@@ -32,6 +32,33 @@ public static class BulkEntry
         return Finish(draft, cards);
     }
 
+    public static Read FromFields(
+        IReadOnlyDictionary<string, string> fields,
+        SessionDraft current,
+        bool isIncome,
+        IReadOnlyList<KnownCard> cards)
+    {
+        var draft = current.IsBulkIncome == isIncome ? current.Clone() : new SessionDraft();
+        draft.IsBulkIncome = isIncome;
+        draft.DeleteIds = [];
+        draft.SummaryFrom = null;
+        draft.SummaryTo = null;
+        draft.SummaryTitle = null;
+        var known = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, value) in fields)
+        {
+            var name = Fold(key);
+            if (IsField(name) && !string.IsNullOrWhiteSpace(value))
+                known[name] = value.Trim();
+        }
+
+        Apply(draft, known);
+        return Finish(draft, cards);
+    }
+
+    private static bool IsField(string key) =>
+        key is "tipo" or "cobranca" or "parcelas" or "valor" or "cartao" or "descricao" or "mes";
+
     private static Read Finish(SessionDraft draft, IReadOnlyList<KnownCard> cards)
     {
         Normalize(draft, cards);
@@ -211,7 +238,7 @@ public static class BulkEntry
                 continue;
 
             var key = Fold(lines[i][..separator]);
-            if (key is not ("tipo" or "cobranca" or "parcelas" or "valor" or "cartao" or "descricao" or "mes"))
+            if (!IsField(key))
                 continue;
 
             fields[key] = lines[i][(separator + 1)..].Trim();
@@ -229,7 +256,7 @@ public static class BulkEntry
         return kind is "gasto" or "entrada";
     }
 
-    private static string Fold(string value)
+    internal static string Fold(string value)
     {
         var lowered = value.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
         var builder = new StringBuilder(lowered.Length);
