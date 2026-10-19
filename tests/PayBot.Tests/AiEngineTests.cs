@@ -16,6 +16,19 @@ public class AiEngineTests
     }
 
     [Fact]
+    public void Secret_admin_command_is_not_available_in_ai_mode()
+    {
+        foreach (var step in new[] { MenuStep.AiMode, MenuStep.AiAwaitingConfirm, MenuStep.AiAwaitingDeleteChoice, MenuStep.AiAwaitingDeleteConfirm })
+        {
+            var turn = AiEngine.Direct("*000", step, new SessionDraft(), []);
+            Assert.NotNull(turn);
+            Assert.Equal(step, turn.NextStep);
+            Assert.Null(turn.Admin);
+            Assert.DoesNotContain("Administracao", turn.Reply);
+        }
+    }
+
+    [Fact]
     public void Desativar_ia_leaves_ai_mode_from_any_ai_step()
     {
         foreach (var step in new[] { MenuStep.AiMode, MenuStep.AiAwaitingConfirm, MenuStep.AiAwaitingDeleteChoice })

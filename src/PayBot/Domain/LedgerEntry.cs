@@ -3,6 +3,7 @@ namespace PayBot.Domain;
 public sealed class LedgerEntry
 {
     public Guid Id { get; set; }
+    public Guid TenantId { get; set; }
     public DateTimeOffset OccurredAt { get; set; }
     public DateOnly LocalDate { get; set; }
     public Direction Direction { get; set; }

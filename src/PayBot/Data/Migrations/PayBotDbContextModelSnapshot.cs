@@ -47,9 +47,12 @@ namespace PayBot.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("Kind", "NormalizedName")
+                    b.HasIndex("TenantId", "Kind", "NormalizedName")
                         .IsUnique();
 
                     b.ToTable("cards", (string)null);
@@ -119,6 +122,9 @@ namespace PayBot.Data.Migrations
                     b.Property<int?>("PaymentMethod")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("WhatsAppMessageId")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -132,6 +138,8 @@ namespace PayBot.Data.Migrations
 
                     b.HasIndex("WhatsAppMessageId")
                         .IsUnique();
+
+                    b.HasIndex("TenantId", "LocalDate");
 
                     b.ToTable("transactions", (string)null);
                 });
@@ -150,6 +158,69 @@ namespace PayBot.Data.Migrations
                     b.ToTable("processed_messages", (string)null);
                 });
 
+            modelBuilder.Entity("PayBot.Domain.Tenant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("tenants", (string)null);
+                });
+
+            modelBuilder.Entity("PayBot.Domain.WhatsAppGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Jid")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Jid")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("groups", (string)null);
+                });
+
+            modelBuilder.Entity("PayBot.Domain.Card", b =>
+                {
+                    b.HasOne("PayBot.Domain.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("PayBot.Domain.LedgerEntry", b =>
                 {
                     b.HasOne("PayBot.Domain.Card", "Card")
@@ -157,7 +228,23 @@ namespace PayBot.Data.Migrations
                         .HasForeignKey("CardId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("PayBot.Domain.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Card");
+                });
+
+            modelBuilder.Entity("PayBot.Domain.WhatsAppGroup", b =>
+                {
+                    b.HasOne("PayBot.Domain.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Tenant");
                 });
 #pragma warning restore 612, 618
         }

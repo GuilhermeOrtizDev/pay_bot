@@ -30,7 +30,7 @@ public class InboundMessageParserTests
 
         var otherGroup = Payload("conversation", "1", fromMe: true, remoteJid: "999@g.us");
         var message = Assert.Single(InboundMessageParser.Parse(otherGroup).Messages);
-        Assert.False(InboundMessageParser.IsAllowedSender(message.RemoteJid, Group));
+        Assert.Equal("999@g.us", message.RemoteJid);
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class InboundMessageParserTests
     {
         var member = Payload("conversation", "1", fromMe: false, participant: "208271755505899@lid");
         var message = Assert.Single(InboundMessageParser.Parse(member).Messages);
-        Assert.True(InboundMessageParser.IsAllowedSender(message.RemoteJid, Group));
+        Assert.Equal(Group, message.RemoteJid);
 
         var lid = Payload(
             "conversation",

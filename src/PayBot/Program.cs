@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using PayBot.Ai;
 using PayBot.Configuration;
 using PayBot.Data;
@@ -27,6 +28,9 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<PayBotDbContext>();
     await db.Database.MigrateAsync();
+    var settings = scope.ServiceProvider.GetRequiredService<IOptions<PayBotOptions>>().Value;
+    var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(TenantSeeder));
+    await TenantSeeder.SeedAsync(db, settings.GroupJid, logger, CancellationToken.None);
 }
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));

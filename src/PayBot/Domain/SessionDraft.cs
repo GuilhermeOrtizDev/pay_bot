@@ -16,6 +16,8 @@ public sealed class SessionDraft
     public string? Description { get; set; }
     public DateOnly? ChargeMonth { get; set; }
     public bool IsBulkIncome { get; set; }
+    public List<Guid> AdminIds { get; set; } = [];
+    public Guid? AdminGroupId { get; set; }
 
     public SessionDraft Clone() => new()
     {
@@ -32,6 +34,8 @@ public sealed class SessionDraft
         SummaryTitle = SummaryTitle,
         Description = Description,
         ChargeMonth = ChargeMonth,
-        IsBulkIncome = IsBulkIncome
+        IsBulkIncome = IsBulkIncome,
+        AdminIds = (AdminIds ?? []).ToList(),
+        AdminGroupId = AdminGroupId
     };
 }

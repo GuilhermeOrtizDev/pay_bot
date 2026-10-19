@@ -155,6 +155,42 @@ public static class MenuTexts
     public const string NoRecords = "Nenhum registro.";
     public const string RecordNotFound = "Registro nao encontrado.";
 
+    public const string Admin = """
+        Administracao
+        0 - Voltar Menu Inicial
+        1 - Cadastrar tenant
+        2 - Cadastrar grupo
+        3 - Vincular grupo a tenant
+        """;
+
+    public const string AskTenantName = "Informe o nome do tenant";
+    public const string AskGroupJid = "Informe o JID do grupo. Ex: 120363000000000000@g.us";
+    public const string InvalidTenantName = "Nome do tenant invalido.";
+    public const string InvalidGroupJid = "JID invalido. Deve terminar com @g.us";
+    public const string TenantExists = "Ja existe um tenant com esse nome.";
+    public const string GroupExists = "Ja existe um grupo com esse JID.";
+    public const string NoGroups = "Nenhum grupo cadastrado.";
+    public const string NoTenants = "Nenhum tenant cadastrado.";
+
+    public static string GroupList(IReadOnlyList<AdminGroup> groups)
+    {
+        var builder = new StringBuilder("Escolha o grupo\n0 - Voltar Menu Inicial");
+        for (var i = 0; i < groups.Count; i++)
+            builder.Append($"\n{i + 1} - {GroupLabel(groups[i])}");
+        return builder.ToString();
+    }
+
+    public static string TenantList(IReadOnlyList<AdminTenant> tenants)
+    {
+        var builder = new StringBuilder("Escolha o tenant\n0 - Voltar Menu Inicial");
+        for (var i = 0; i < tenants.Count; i++)
+            builder.Append($"\n{i + 1} - {tenants[i].Name}");
+        return builder.ToString();
+    }
+
+    public static string GroupLabel(AdminGroup group) =>
+        $"{group.Jid} ({(string.IsNullOrWhiteSpace(group.TenantName) ? "sem tenant" : "tenant " + group.TenantName)})";
+
     public static string MethodLabel(PaymentMethod method) => method switch
     {
         PaymentMethod.Pix => "Pix",
