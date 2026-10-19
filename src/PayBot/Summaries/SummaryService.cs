@@ -7,9 +7,9 @@ namespace PayBot.Summaries;
 
 public sealed class SummaryService(PayBotDbContext db)
 {
-    public async Task<SummaryReport> BuildAsync(SummaryQuery query, CancellationToken cancellationToken)
+    public async Task<SummaryReport> BuildAsync(Guid tenantId, SummaryQuery query, CancellationToken cancellationToken)
     {
-        var source = db.Transactions.AsNoTracking();
+        var source = db.Transactions.AsNoTracking().Where(entry => entry.TenantId == tenantId);
         if (query.From is DateOnly from && query.To is DateOnly to)
             source = source.Where(entry => entry.LocalDate >= from && entry.LocalDate <= to);
 
@@ -28,12 +28,12 @@ public sealed class SummaryService(PayBotDbContext db)
         return SummaryAggregator.Build(query.Title, rows);
     }
 
-    public async Task<decimal> MonthBalanceAsync(DateOnly date, CancellationToken cancellationToken)
+    public async Task<decimal> MonthBalanceAsync(Guid tenantId, DateOnly date, CancellationToken cancellationToken)
     {
         var start = new DateOnly(date.Year, date.Month, 1);
         var end = start.AddMonths(1).AddDays(-1);
         var rows = await db.Transactions.AsNoTracking()
-            .Where(entry => entry.LocalDate >= start && entry.LocalDate <= end)
+            .Where(entry => entry.TenantId == tenantId && entry.LocalDate >= start && entry.LocalDate <= end)
             .Select(entry => new { entry.Direction, entry.Amount })
             .ToListAsync(cancellationToken);
 

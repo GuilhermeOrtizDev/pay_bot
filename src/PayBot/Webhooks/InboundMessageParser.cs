@@ -60,7 +60,20 @@ public static class BotEcho
         "Registro nao encontrado",
         "Registrar em texto",
         "Exemplo",
-        "Faltou ou esta invalido"
+        "Faltou ou esta invalido",
+        "Administracao",
+        "Tenant cadastrado:",
+        "Grupo cadastrado:",
+        "Grupo vinculado:",
+        "Informe o nome do tenant",
+        "Informe o JID",
+        "Escolha o grupo",
+        "Escolha o tenant",
+        "Nome do tenant invalido",
+        "JID invalido",
+        "Ja existe um",
+        "Nenhum grupo",
+        "Nenhum tenant"
     ];
 
     public static bool HasMarker(string? text) => text?.Contains(Marker) == true;
@@ -84,14 +97,6 @@ public static class InboundMessageParser
 
         return string.Equals(bodyKey, expected, StringComparison.Ordinal)
             || string.Equals(headerKey, expected, StringComparison.Ordinal);
-    }
-
-    public static bool IsAllowedSender(string remoteJid, string groupJid)
-    {
-        if (string.IsNullOrWhiteSpace(groupJid) || string.IsNullOrWhiteSpace(remoteJid))
-            return false;
-
-        return string.Equals(remoteJid.Trim(), groupJid.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     public static ParsedWebhook Parse(string json)

@@ -15,9 +15,9 @@ public sealed class EvolutionClient(
 {
     private readonly PayBotOptions _options = options.Value;
 
-    public async Task SendAsync(string text, CancellationToken cancellationToken)
+    public async Task SendAsync(string groupJid, string text, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(_options.GroupJid) || string.IsNullOrWhiteSpace(_options.EvolutionApiKey))
+        if (string.IsNullOrWhiteSpace(groupJid) || string.IsNullOrWhiteSpace(_options.EvolutionApiKey))
         {
             logger.LogWarning("Envio ignorado: grupo ou chave da Evolution ausente.");
             return;
@@ -25,7 +25,7 @@ public sealed class EvolutionClient(
 
         var status = await PostAsync(
             $"/message/sendText/{Uri.EscapeDataString(_options.EvolutionInstance)}",
-            new { number = _options.GroupJid.Trim(), text = BotEcho.Marker + text },
+            new { number = groupJid.Trim(), text = BotEcho.Marker + text },
             cancellationToken);
 
         if (!IsSuccess(status))
@@ -33,12 +33,13 @@ public sealed class EvolutionClient(
     }
 
     public async Task<bool> SendDocumentAsync(
+        string groupJid,
         byte[] content,
         string fileName,
         string caption,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(_options.GroupJid) || string.IsNullOrWhiteSpace(_options.EvolutionApiKey))
+        if (string.IsNullOrWhiteSpace(groupJid) || string.IsNullOrWhiteSpace(_options.EvolutionApiKey))
         {
             logger.LogWarning("PDF ignorado: grupo ou chave da Evolution ausente.");
             return false;
@@ -48,7 +49,7 @@ public sealed class EvolutionClient(
             $"/message/sendMedia/{Uri.EscapeDataString(_options.EvolutionInstance)}",
             new
             {
-                number = _options.GroupJid.Trim(),
+                number = groupJid.Trim(),
                 mediatype = "document",
                 mimetype = "application/pdf",
                 caption,

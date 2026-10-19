@@ -18,6 +18,9 @@ public static class AiEngine
         SessionDraft current,
         IReadOnlyList<KnownCard> cards)
     {
+        if (AdminEngine.IsCommand(rawText))
+            return Stay(step, current, Reminder(null, step));
+
         var text = Fold(rawText);
         if (text == "desativar ia")
             return Exit();

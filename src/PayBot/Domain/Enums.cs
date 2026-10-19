@@ -57,5 +57,10 @@ public enum MenuStep
     AiMode = 23,
     AiAwaitingConfirm = 24,
     AiAwaitingDeleteChoice = 25,
-    AiAwaitingDeleteConfirm = 26
+    AiAwaitingDeleteConfirm = 26,
+    AdminMenu = 27,
+    AdminAwaitingTenantName = 28,
+    AdminAwaitingGroupJid = 29,
+    AdminAwaitingLinkGroup = 30,
+    AdminAwaitingLinkTenant = 31
 }

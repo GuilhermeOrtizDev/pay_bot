@@ -51,6 +51,7 @@ public class SummaryTests
         await db.SaveChangesAsync();
 
         var report = await new SummaryService(db).BuildAsync(
+            TestDb.Tenant,
             new SummaryQuery(new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31), "Resumo de 01/01/2026 a 31/12/2026"),
             CancellationToken.None);
 
@@ -68,6 +69,7 @@ public class SummaryTests
         await db.SaveChangesAsync();
 
         var report = await new SummaryService(db).BuildAsync(
+            TestDb.Tenant,
             new SummaryQuery(null, null, "Resumo total"),
             CancellationToken.None);
 
@@ -87,6 +89,7 @@ public class SummaryTests
         await db.SaveChangesAsync();
 
         var report = await new SummaryService(db).BuildAsync(
+            TestDb.Tenant,
             new SummaryQuery(new DateOnly(2026, 5, 10), new DateOnly(2026, 5, 20), "Resumo de 10/05/2026 a 20/05/2026"),
             CancellationToken.None);
 
@@ -97,13 +100,14 @@ public class SummaryTests
 
     private static async Task<string> FormatAsync(PayBotDbContext db, DateOnly from, DateOnly to, string title)
     {
-        var report = await new SummaryService(db).BuildAsync(new SummaryQuery(from, to, title), CancellationToken.None);
+        var report = await new SummaryService(db).BuildAsync(TestDb.Tenant, new SummaryQuery(from, to, title), CancellationToken.None);
         return SummaryFormatter.Format(report);
     }
 
     private static Card Card(CardKind kind, string name) => new()
     {
         Id = Guid.NewGuid(),
+        TenantId = TestDb.Tenant,
         Name = name,
         NormalizedName = name.ToLowerInvariant(),
         Kind = kind,
@@ -111,9 +115,10 @@ public class SummaryTests
         LastUsedAt = DateTimeOffset.UnixEpoch
     };
 
-    private static LedgerEntry Income(DateOnly date, decimal amount, string description) => new()
+    private static LedgerEntry Income(DateOnly date, decimal amount, string description, Guid? tenant = null) => new()
     {
         Id = Guid.NewGuid(),
+        TenantId = tenant ?? TestDb.Tenant,
         OccurredAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
         LocalDate = date,
         Direction = Direction.Income,
@@ -122,9 +127,10 @@ public class SummaryTests
         WhatsAppMessageId = Guid.NewGuid().ToString("N")
     };
 
-    private static LedgerEntry Expense(DateOnly date, decimal amount, PaymentMethod method, Card? card = null, int? installments = null) => new()
+    private static LedgerEntry Expense(DateOnly date, decimal amount, PaymentMethod method, Card? card = null, int? installments = null, Guid? tenant = null) => new()
     {
         Id = Guid.NewGuid(),
+        TenantId = tenant ?? TestDb.Tenant,
         OccurredAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
         LocalDate = date,
         Direction = Direction.Expense,
@@ -145,9 +151,31 @@ public class SummaryTests
         db.Transactions.Add(Expense(new DateOnly(2026, 9, 1), 999, PaymentMethod.Pix));
         await db.SaveChangesAsync();
 
-        var balance = await new SummaryService(db).MonthBalanceAsync(new DateOnly(2026, 10, 15), CancellationToken.None);
+        var balance = await new SummaryService(db).MonthBalanceAsync(TestDb.Tenant, new DateOnly(2026, 10, 15), CancellationToken.None);
 
         Assert.Equal(2550m, balance);
+    }
+
+    [Fact]
+    public async Task Summary_and_balance_only_see_their_tenant()
+    {
+        await using var db = await TestDb.CreateAsync();
+        db.Transactions.Add(Income(new DateOnly(2026, 10, 2), 3000, "salario"));
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 3), 100, PaymentMethod.Pix));
+        db.Transactions.Add(Income(new DateOnly(2026, 10, 2), 777, "outro", TestDb.OtherTenant));
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 3), 555, PaymentMethod.Pix, tenant: TestDb.OtherTenant));
+        await db.SaveChangesAsync();
+
+        var service = new SummaryService(db);
+        var mine = await service.BuildAsync(TestDb.Tenant, new SummaryQuery(null, null, "Resumo total"), CancellationToken.None);
+        var other = await service.BuildAsync(TestDb.OtherTenant, new SummaryQuery(null, null, "Resumo total"), CancellationToken.None);
+
+        Assert.Equal(3000, mine.IncomeTotal);
+        Assert.Equal(100, mine.ExpenseTotal);
+        Assert.Equal(777, other.IncomeTotal);
+        Assert.Equal(555, other.ExpenseTotal);
+        Assert.Equal(2900m, await service.MonthBalanceAsync(TestDb.Tenant, new DateOnly(2026, 10, 1), CancellationToken.None));
+        Assert.Equal(222m, await service.MonthBalanceAsync(TestDb.OtherTenant, new DateOnly(2026, 10, 1), CancellationToken.None));
     }
 
     [Fact]
@@ -186,6 +214,9 @@ public class SummaryTests
 
 file static class TestDb
 {
+    public static readonly Guid Tenant = PayBot.Domain.Tenant.DefaultId;
+    public static readonly Guid OtherTenant = Guid.Parse("22222222-2222-2222-2222-222222222222");
+
     public static async Task<PayBotDbContext> CreateAsync()
     {
         var connection = new SqliteConnection("Data Source=:memory:");
@@ -193,6 +224,9 @@ file static class TestDb
         var options = new DbContextOptionsBuilder<PayBotDbContext>().UseSqlite(connection).Options;
         var db = new PayBotDbContext(options);
         await db.Database.EnsureCreatedAsync();
+        db.Tenants.Add(new PayBot.Domain.Tenant { Id = Tenant, Name = "Principal", NormalizedName = "principal" });
+        db.Tenants.Add(new PayBot.Domain.Tenant { Id = OtherTenant, Name = "Outro", NormalizedName = "outro" });
+        await db.SaveChangesAsync();
         return db;
     }
 }

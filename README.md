@@ -38,6 +38,18 @@ curl.exe "http://localhost/group/fetchAllGroups/paybot?getParticipants=false" -H
 docker compose up -d paybot
 ```
 
+O `GROUP_JID` so serve para cadastrar o primeiro grupo. Na subida, se esse JID ainda nao estiver no banco, ele e vinculado ao tenant `Principal`. Depois disso o bot le os grupos do banco.
+
+## Tenants e grupos
+
+Cada tenant tem seus gastos, entradas e cartoes. Um tenant pode ter varios grupos, e cada grupo pertence a um tenant so. Mensagens de grupo sem tenant sao ignoradas.
+
+Para administrar, envie `*000` em um grupo que ja tenha tenant. A opcao nao aparece no menu e nao funciona no Modo IA (saia com `desativar IA` antes).
+
+- `1 - Cadastrar tenant`: informe o nome.
+- `2 - Cadastrar grupo`: informe o JID (`...@g.us`). O grupo fica sem tenant ate ser vinculado.
+- `3 - Vincular grupo a tenant`: escolha o grupo na lista e depois o tenant. Se o grupo ja tinha tenant, ele passa para o novo.
+
 `OWNER_NUMBER` e o seu numero com DDI, so digitos. Mensagens suas (a instancia e o seu WhatsApp) e desse numero sao aceitas. O resto do grupo e ignorado.
 
 ## Modo IA

@@ -63,9 +63,16 @@ public sealed class InboundProcessor(
 
     private async Task ProcessAsync(CandidateMessage message, PayBotOptions settings, CancellationToken cancellationToken)
     {
-        if (!InboundMessageParser.IsAllowedSender(message.RemoteJid, settings.GroupJid))
+        var groupJid = WhatsAppGroup.NormalizeJid(message.RemoteJid);
+        var tenantId = groupJid.Length == 0
+            ? null
+            : await db.Groups.AsNoTracking()
+                .Where(group => group.Jid == groupJid)
+                .Select(group => group.TenantId)
+                .FirstOrDefaultAsync(cancellationToken);
+        if (tenantId is not Guid tenant)
         {
-            logger.LogInformation("Mensagem ignorada. Chat {RemoteJid}.", message.RemoteJid);
+            logger.LogInformation("Mensagem ignorada. Chat {RemoteJid} sem tenant.", message.RemoteJid);
             return;
         }
 
@@ -77,7 +84,6 @@ public sealed class InboundProcessor(
         if (await db.ProcessedMessages.AnyAsync(item => item.MessageId == message.MessageId, cancellationToken))
             return;
 
-        var groupJid = settings.GroupJid.Trim();
         var session = await db.Sessions.SingleOrDefaultAsync(item => item.GroupJid == groupJid, cancellationToken);
         var aiActive = settings.AiAvailable && session is not null && AiEngine.IsAiStep(session.Step);
         if (message.IsAudio && !aiActive)
@@ -100,13 +106,21 @@ public sealed class InboundProcessor(
         }
 
         var cards = await db.Cards
+            .Where(card => card.TenantId == tenant)
             .OrderByDescending(card => card.LastUsedAt)
             .Select(card => new KnownCard(card.Id, card.Name, card.Kind))
             .ToListAsync(cancellationToken);
 
-        var turn = aiActive
-            ? await AiTurnAsync(message, session.Step, DeserializeDraft(session.DraftJson), cards, settings, cancellationToken)
-            : MenuEngine.Handle(
+        var adminActive = !aiActive
+            && session.Step != MenuStep.Paused
+            && (AdminEngine.IsAdminStep(session.Step) || AdminEngine.IsCommand(message.Text));
+        MenuTurn turn;
+        if (aiActive)
+            turn = await AiTurnAsync(message, session.Step, DeserializeDraft(session.DraftJson), cards, settings, cancellationToken);
+        else if (adminActive)
+            turn = await AdminTurnAsync(message.Text, session.Step, DeserializeDraft(session.DraftJson), settings, cancellationToken);
+        else
+            turn = MenuEngine.Handle(
                 message.Text,
                 session.Step,
                 DeserializeDraft(session.DraftJson),
@@ -117,9 +131,11 @@ public sealed class InboundProcessor(
 
         var now = DateTimeOffset.UtcNow;
         if (turn.Expense is not null)
-            await AddExpenseAsync(turn.Expense, message.MessageId, now, cancellationToken);
+            await AddExpenseAsync(tenant, turn.Expense, message.MessageId, now, cancellationToken);
         if (turn.Income is not null)
-            AddIncome(turn.Income, message.MessageId);
+            AddIncome(tenant, turn.Income, message.MessageId);
+        if (turn.Admin is not null)
+            await ApplyAdminAsync(turn.Admin, now, cancellationToken);
 
         var reply = turn.Reply;
         var nextStep = turn.NextStep;
@@ -127,10 +143,11 @@ public sealed class InboundProcessor(
         var previousStep = session.Step;
         if (turn.Summary is not null)
         {
-            var report = await summaries.BuildAsync(turn.Summary, cancellationToken);
+            var report = await summaries.BuildAsync(tenant, turn.Summary, cancellationToken);
             if (turn.AsPdf)
             {
                 var sent = await evolution.SendDocumentAsync(
+                    groupJid,
                     SummaryPdf.Render(report),
                     "resumo.pdf",
                     report.Title,
@@ -159,7 +176,7 @@ public sealed class InboundProcessor(
 
         if (turn.DeleteList is not null)
         {
-            var entries = await LoadDeleteCandidatesAsync(turn.DeleteList, cancellationToken);
+            var entries = await LoadDeleteCandidatesAsync(tenant, turn.DeleteList, cancellationToken);
             if (entries.Count == 0)
             {
                 reply = aiTurn ? MenuTexts.NoRecords : MenuTexts.NoRecords + "\n\n" + MenuTexts.Remove;
@@ -179,7 +196,7 @@ public sealed class InboundProcessor(
         {
             var entry = await db.Transactions
                 .Include(item => item.Card)
-                .FirstOrDefaultAsync(item => item.Id == deleteId, cancellationToken);
+                .FirstOrDefaultAsync(item => item.Id == deleteId && item.TenantId == tenant, cancellationToken);
             var menu = aiTurn ? "" : "\n\n" + MenuTexts.Remove;
             if (entry is null)
                 reply = MenuTexts.RecordNotFound + menu;
@@ -213,15 +230,15 @@ public sealed class InboundProcessor(
         {
             logger.LogError(exception, "Falha ao gravar a mensagem {MessageId}.", message.MessageId);
             db.ChangeTracker.Clear();
-            await evolution.SendAsync(FailureReply(previousStep), cancellationToken);
+            await evolution.SendAsync(groupJid, FailureReply(previousStep), cancellationToken);
             return;
         }
 
         if (turn.Expense is not null || turn.Income is not null)
-            reply = await AppendMonthBalanceAsync(reply, turn, now, cancellationToken);
+            reply = await AppendMonthBalanceAsync(tenant, reply, turn, now, cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(reply))
-            await evolution.SendAsync(reply, cancellationToken);
+            await evolution.SendAsync(groupJid, reply, cancellationToken);
 
         logger.LogInformation("Mensagem {MessageId} levou o menu para {Step}.", message.MessageId, turn.NextStep);
     }
@@ -257,6 +274,56 @@ public sealed class InboundProcessor(
         return AiEngine.Interpret(intent, step, draft, cards);
     }
 
+    private async Task<MenuTurn> AdminTurnAsync(
+        string? text,
+        MenuStep step,
+        SessionDraft draft,
+        PayBotOptions settings,
+        CancellationToken cancellationToken)
+    {
+        var tenants = await db.Tenants.AsNoTracking()
+            .OrderBy(tenant => tenant.Name)
+            .Select(tenant => new AdminTenant(tenant.Id, tenant.Name))
+            .ToListAsync(cancellationToken);
+        var groups = await db.Groups.AsNoTracking()
+            .OrderBy(group => group.CreatedAt)
+            .Select(group => new AdminGroup(group.Id, group.Jid, group.Tenant != null ? group.Tenant.Name : null))
+            .ToListAsync(cancellationToken);
+
+        return AdminEngine.Handle(text, step, draft, tenants, groups, settings.AiAvailable);
+    }
+
+    private async Task ApplyAdminAsync(AdminChange change, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(change.NewTenantName))
+        {
+            db.Tenants.Add(new Tenant
+            {
+                Id = Guid.NewGuid(),
+                Name = change.NewTenantName.Trim(),
+                NormalizedName = Normalize(change.NewTenantName),
+                CreatedAt = now
+            });
+        }
+
+        if (!string.IsNullOrWhiteSpace(change.NewGroupJid))
+        {
+            db.Groups.Add(new WhatsAppGroup
+            {
+                Id = Guid.NewGuid(),
+                Jid = WhatsAppGroup.NormalizeJid(change.NewGroupJid),
+                CreatedAt = now
+            });
+        }
+
+        if (change.LinkGroupId is Guid groupId && change.LinkTenantId is Guid tenantId)
+        {
+            var group = await db.Groups.FirstOrDefaultAsync(item => item.Id == groupId, cancellationToken);
+            if (group is not null)
+                group.TenantId = tenantId;
+        }
+    }
+
     private async Task<string?> TranscribeAsync(CandidateMessage message, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(message.RawJson))
@@ -278,10 +345,12 @@ public sealed class InboundProcessor(
         MenuStep.AwaitingExpenseDescription or MenuStep.AwaitingIncomeDescription => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskDescription,
         MenuStep.AwaitingInstallments => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskInstallments,
         MenuStep.AwaitingNewCardName => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskCardName,
+        MenuStep.AdminAwaitingTenantName => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskTenantName,
+        MenuStep.AdminAwaitingGroupJid => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskGroupJid,
         _ => MenuTexts.SaveFailed
     };
 
-    private async Task AddExpenseAsync(PendingExpense expense, string messageId, DateTimeOffset now, CancellationToken cancellationToken)
+    private async Task AddExpenseAsync(Guid tenantId, PendingExpense expense, string messageId, DateTimeOffset now, CancellationToken cancellationToken)
     {
         Guid? cardId = expense.CardId;
         if (expense.Method is PaymentMethod.CreditCard or PaymentMethod.DebitCard)
@@ -291,13 +360,14 @@ public sealed class InboundProcessor(
             {
                 var normalized = Normalize(expense.CardName);
                 var card = await db.Cards.FirstOrDefaultAsync(
-                    item => item.Kind == kind && item.NormalizedName == normalized,
+                    item => item.TenantId == tenantId && item.Kind == kind && item.NormalizedName == normalized,
                     cancellationToken);
                 if (card is null)
                 {
                     card = new Card
                     {
                         Id = Guid.NewGuid(),
+                        TenantId = tenantId,
                         Name = expense.CardName.Trim(),
                         NormalizedName = normalized,
                         Kind = kind,
@@ -313,9 +383,13 @@ public sealed class InboundProcessor(
             }
             else if (cardId is Guid existingId)
             {
-                var card = await db.Cards.FirstOrDefaultAsync(item => item.Id == existingId, cancellationToken);
+                var card = await db.Cards.FirstOrDefaultAsync(
+                    item => item.Id == existingId && item.TenantId == tenantId,
+                    cancellationToken);
                 if (card is not null)
                     card.LastUsedAt = now;
+                else
+                    cardId = null;
             }
         }
 
@@ -323,6 +397,7 @@ public sealed class InboundProcessor(
         db.Transactions.Add(new LedgerEntry
         {
             Id = Guid.NewGuid(),
+            TenantId = tenantId,
             OccurredAt = expense.ChargeMonth is null ? now : SaoPauloClock.AtNoon(chargeDate),
             LocalDate = chargeDate,
             Direction = Direction.Expense,
@@ -336,9 +411,9 @@ public sealed class InboundProcessor(
         });
     }
 
-    private async Task<List<LedgerEntry>> LoadDeleteCandidatesAsync(DeleteListRequest request, CancellationToken cancellationToken)
+    private async Task<List<LedgerEntry>> LoadDeleteCandidatesAsync(Guid tenantId, DeleteListRequest request, CancellationToken cancellationToken)
     {
-        var query = db.Transactions.Include(entry => entry.Card).AsQueryable();
+        var query = db.Transactions.Include(entry => entry.Card).Where(entry => entry.TenantId == tenantId);
         if (request.From is DateOnly from && request.To is DateOnly to)
             query = query.Where(entry => entry.LocalDate >= from && entry.LocalDate <= to);
 
@@ -349,12 +424,12 @@ public sealed class InboundProcessor(
             .ToListAsync(cancellationToken);
     }
 
-    private async Task<string> AppendMonthBalanceAsync(string reply, MenuTurn turn, DateTimeOffset now, CancellationToken cancellationToken)
+    private async Task<string> AppendMonthBalanceAsync(Guid tenantId, string reply, MenuTurn turn, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var month = turn.Expense?.ChargeMonth ?? turn.Income?.ChargeMonth ?? SaoPauloClock.LocalDate(now);
         try
         {
-            var balance = await summaries.MonthBalanceAsync(month, cancellationToken);
+            var balance = await summaries.MonthBalanceAsync(tenantId, month, cancellationToken);
             return MenuTexts.WithMonthBalance(reply, month, balance);
         }
         catch (Exception exception)
@@ -364,11 +439,12 @@ public sealed class InboundProcessor(
         }
     }
 
-    private void AddIncome(PendingIncome income, string messageId)
+    private void AddIncome(Guid tenantId, PendingIncome income, string messageId)
     {
         db.Transactions.Add(new LedgerEntry
         {
             Id = Guid.NewGuid(),
+            TenantId = tenantId,
             OccurredAt = SaoPauloClock.AtNoon(income.ChargeMonth),
             LocalDate = income.ChargeMonth,
             Direction = Direction.Income,

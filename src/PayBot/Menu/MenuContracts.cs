@@ -21,6 +21,16 @@ public sealed record PendingIncome(decimal Amount, string Description, DateOnly 
 
 public sealed record SummaryQuery(DateOnly? From, DateOnly? To, string Title);
 
+public sealed record AdminTenant(Guid Id, string Name);
+
+public sealed record AdminGroup(Guid Id, string Jid, string? TenantName);
+
+public sealed record AdminChange(
+    string? NewTenantName = null,
+    string? NewGroupJid = null,
+    Guid? LinkGroupId = null,
+    Guid? LinkTenantId = null);
+
 public sealed record MenuTurn(
     string Reply,
     MenuStep NextStep,
@@ -30,4 +40,5 @@ public sealed record MenuTurn(
     SummaryQuery? Summary,
     DeleteListRequest? DeleteList = null,
     Guid? DeleteId = null,
-    bool AsPdf = false);
+    bool AsPdf = false,
+    AdminChange? Admin = null);
