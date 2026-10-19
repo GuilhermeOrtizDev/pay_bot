@@ -7,7 +7,9 @@ public sealed record CandidateMessage(
     string RemoteJid,
     bool FromMe,
     string? Participant,
-    string? Text);
+    string? Text,
+    bool IsAudio = false,
+    string? RawJson = null);
 
 public sealed class ParsedWebhook
 {
@@ -61,9 +63,11 @@ public static class BotEcho
         "Faltou ou esta invalido"
     ];
 
+    public static bool HasMarker(string? text) => text?.Contains(Marker) == true;
+
     public static bool IsEcho(string text)
     {
-        if (text.Contains(Marker))
+        if (HasMarker(text))
             return true;
 
         var trimmed = text.Trim();
@@ -139,15 +143,22 @@ public static class InboundMessageParser
             return;
 
         string? text = null;
+        var audio = false;
         if (TryProp(item, "message", out var message))
-            text = ReadText(Unwrap(message));
+        {
+            var content = Unwrap(message);
+            text = ReadText(content);
+            audio = text is null && TryProp(content, "audioMessage", out var media) && media.ValueKind == JsonValueKind.Object;
+        }
 
         messages.Add(new CandidateMessage(
             id,
             GroupChatJid(key),
             ReadBool(key, "fromMe"),
             ReadString(key, "participant"),
-            text));
+            text,
+            audio,
+            audio ? item.GetRawText() : null));
     }
 
     private static string GroupChatJid(JsonElement key)

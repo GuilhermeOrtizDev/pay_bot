@@ -62,6 +62,9 @@ services:
       PayBot__WebhookUrl: http://paybot:8080/webhooks/evolution
       PayBot__GroupJid: ${GROUP_JID:-}
       PayBot__OwnerNumber: ${OWNER_NUMBER:-}
+      PayBot__AiEnabled: ${AI_ENABLED:-false}
+      PayBot__AiTranscribeEnabled: ${AI_TRANSCRIBE_ENABLED:-false}
+      PayBot__OpenAiApiKey: ${OPENAI_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy

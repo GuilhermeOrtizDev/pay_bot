@@ -640,12 +640,56 @@ public class MenuEngineTests
         Assert.Null(saved.Expense.ChargeMonth);
     }
 
+    [Fact]
+    public void Ai_option_is_hidden_and_ignored_when_ai_is_off()
+    {
+        var menu = Act("x", MenuStep.Main);
+        Assert.DoesNotContain("8 - Modo IA", menu.Reply);
+
+        var eight = Act("8", MenuStep.Main);
+        Assert.Equal(MenuStep.Main, eight.NextStep);
+        Assert.DoesNotContain("8 - Modo IA", eight.Reply);
+    }
+
+    [Fact]
+    public void Ai_option_shows_in_every_main_menu_and_enters_ai_mode()
+    {
+        var menu = Act("x", MenuStep.Main, ai: true);
+        Assert.EndsWith("7 - Exemplos" + MenuTexts.AiOption, menu.Reply);
+
+        var saved = Act("pao", MenuStep.AwaitingExpenseDescription, new SessionDraft { Method = PaymentMethod.Pix, Amount = 10m }, ai: true);
+        Assert.NotNull(saved.Expense);
+        Assert.EndsWith(MenuTexts.AiOption, saved.Reply);
+
+        var ai = Act("8", MenuStep.Main, ai: true);
+        Assert.Equal(MenuStep.AiMode, ai.NextStep);
+        Assert.Contains("desativar IA", ai.Reply);
+    }
+
+    [Fact]
+    public void Ai_step_returns_to_main_menu_when_ai_is_off()
+    {
+        var turn = Act("gastei 10 no pix", MenuStep.AiMode);
+        Assert.Equal(MenuStep.Main, turn.NextStep);
+        Assert.Equal(MenuTexts.Main, turn.Reply);
+    }
+
+    [Fact]
+    public void Month_balance_goes_before_the_menu_with_ai_option()
+    {
+        var reply = "Gasto registrado: Pix R$ 10,00 - pao\n\n" + MenuTexts.MainMenu(true);
+        var text = MenuTexts.WithMonthBalance(reply, new DateOnly(2026, 10, 1), 5m).Replace("\r\n", "\n");
+        Assert.Contains("Saldo de 10/2026: R$ 5,00\n\n1 - Registrar gasto", text);
+        Assert.EndsWith("8 - Modo IA", text);
+    }
+
     private static MenuTurn Act(
         string text,
         MenuStep step,
         SessionDraft? draft = null,
-        IReadOnlyList<KnownCard>? cards = null) =>
-        MenuEngine.Handle(text, step, draft ?? new SessionDraft(), cards ?? [], Today);
+        IReadOnlyList<KnownCard>? cards = null,
+        bool ai = false) =>
+        MenuEngine.Handle(text, step, draft ?? new SessionDraft(), cards ?? [], Today, ai);
 
     private static IReadOnlyList<KnownCard> Cards() =>
     [

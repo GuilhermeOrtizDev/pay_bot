@@ -40,6 +40,14 @@ docker compose up -d paybot
 
 `OWNER_NUMBER` e o seu numero com DDI, so digitos. Mensagens suas (a instancia e o seu WhatsApp) e desse numero sao aceitas. O resto do grupo e ignorado.
 
+## Modo IA
+
+Com `AI_ENABLED=true` e `OPENAI_API_KEY` no `.env`, o menu ganha a opcao `8 - Modo IA`. Nesse modo o menu numerico fica desligado: escreva em texto livre ("gastei 32,50 no mercado no pix", "resumo do mes em pdf", "apagar o mercado de ontem"). A IA pede o que faltar e o bot so grava ou apaga depois de `sim`. Para sair, envie `desativar IA`.
+
+Com `AI_TRANSCRIBE_ENABLED=true`, audios enviados no Modo IA sao transcritos e tratados como texto. Fora do Modo IA, audio e ignorado.
+
+Depois de mudar o `.env`, recrie o PayBot: `docker compose up -d paybot`.
+
 ## CI/CD
 
 Publicar uma release com tag `v*` (por exemplo `v1.0.0`), ou executar o workflow manualmente, testa, gera a imagem `linux/arm64` e sobe na EC2 por SSH. Push na `main` nao dispara o deploy. Secrets do repositorio, os mesmos do microservices:

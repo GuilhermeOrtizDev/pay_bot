@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Npgsql;
+using PayBot.Ai;
 using PayBot.Configuration;
 using PayBot.Data;
 using PayBot.Domain;
@@ -15,6 +16,7 @@ namespace PayBot.Webhooks;
 public sealed class InboundProcessor(
     PayBotDbContext db,
     EvolutionClient evolution,
+    OpenAiClient ai,
     SummaryService summaries,
     InboundGate gate,
     IOptions<PayBotOptions> options,
@@ -67,7 +69,9 @@ public sealed class InboundProcessor(
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(message.Text) || BotEcho.IsEcho(message.Text))
+        if (string.IsNullOrWhiteSpace(message.Text) && !message.IsAudio)
+            return;
+        if (BotEcho.HasMarker(message.Text))
             return;
 
         if (await db.ProcessedMessages.AnyAsync(item => item.MessageId == message.MessageId, cancellationToken))
@@ -75,6 +79,13 @@ public sealed class InboundProcessor(
 
         var groupJid = settings.GroupJid.Trim();
         var session = await db.Sessions.SingleOrDefaultAsync(item => item.GroupJid == groupJid, cancellationToken);
+        var aiActive = settings.AiAvailable && session is not null && AiEngine.IsAiStep(session.Step);
+        if (message.IsAudio && !aiActive)
+            return;
+        // In AI mode free text like "Remover ..." or "Cartao credito ..." must not be mistaken for a bot echo.
+        if (!aiActive && BotEcho.IsEcho(message.Text!))
+            return;
+
         if (session is null)
         {
             session = new ConversationSession
@@ -93,12 +104,16 @@ public sealed class InboundProcessor(
             .Select(card => new KnownCard(card.Id, card.Name, card.Kind))
             .ToListAsync(cancellationToken);
 
-        var turn = MenuEngine.Handle(
-            message.Text,
-            session.Step,
-            DeserializeDraft(session.DraftJson),
-            cards,
-            SaoPauloClock.Today());
+        var turn = aiActive
+            ? await AiTurnAsync(message, session.Step, DeserializeDraft(session.DraftJson), cards, settings, cancellationToken)
+            : MenuEngine.Handle(
+                message.Text,
+                session.Step,
+                DeserializeDraft(session.DraftJson),
+                cards,
+                SaoPauloClock.Today(),
+                settings.AiAvailable);
+        var aiTurn = AiEngine.IsAiStep(turn.NextStep);
 
         var now = DateTimeOffset.UtcNow;
         if (turn.Expense is not null)
@@ -121,7 +136,9 @@ public sealed class InboundProcessor(
                     report.Title,
                     cancellationToken);
                 if (sent)
-                    reply = MenuTexts.Summary;
+                    reply = aiTurn ? "" : MenuTexts.Summary;
+                else if (aiTurn)
+                    reply = MenuTexts.PdfFailed + "\n\n" + SummaryFormatter.Format(report);
                 else
                 {
                     reply = MenuTexts.PdfFailed + "\n\n" + MenuTexts.SummaryOutput;
@@ -135,7 +152,9 @@ public sealed class InboundProcessor(
                 }
             }
             else
-                reply = SummaryFormatter.Format(report) + "\n\n" + MenuTexts.Summary;
+                reply = aiTurn
+                    ? SummaryFormatter.Format(report)
+                    : SummaryFormatter.Format(report) + "\n\n" + MenuTexts.Summary;
         }
 
         if (turn.DeleteList is not null)
@@ -143,13 +162,15 @@ public sealed class InboundProcessor(
             var entries = await LoadDeleteCandidatesAsync(turn.DeleteList, cancellationToken);
             if (entries.Count == 0)
             {
-                reply = MenuTexts.NoRecords + "\n\n" + MenuTexts.Remove;
-                nextStep = MenuStep.RemoveMenu;
+                reply = aiTurn ? MenuTexts.NoRecords : MenuTexts.NoRecords + "\n\n" + MenuTexts.Remove;
+                nextStep = aiTurn ? MenuStep.AiMode : MenuStep.RemoveMenu;
                 draft = new SessionDraft();
             }
             else
             {
-                reply = DeleteListFormatter.Format(entries);
+                reply = aiTurn
+                    ? DeleteListFormatter.FormatChoices(entries) + "\n\n" + MenuTexts.AiDeleteChoice
+                    : DeleteListFormatter.Format(entries);
                 draft.DeleteIds = entries.Select(entry => entry.Id).ToList();
             }
         }
@@ -159,11 +180,12 @@ public sealed class InboundProcessor(
             var entry = await db.Transactions
                 .Include(item => item.Card)
                 .FirstOrDefaultAsync(item => item.Id == deleteId, cancellationToken);
+            var menu = aiTurn ? "" : "\n\n" + MenuTexts.Remove;
             if (entry is null)
-                reply = MenuTexts.RecordNotFound + "\n\n" + MenuTexts.Remove;
+                reply = MenuTexts.RecordNotFound + menu;
             else
             {
-                reply = $"Registro removido: {DeleteListFormatter.Line(entry)}\n\n{MenuTexts.Remove}";
+                reply = $"Registro removido: {DeleteListFormatter.Line(entry)}{menu}";
                 db.Transactions.Remove(entry);
             }
         }
@@ -202,6 +224,49 @@ public sealed class InboundProcessor(
             await evolution.SendAsync(reply, cancellationToken);
 
         logger.LogInformation("Mensagem {MessageId} levou o menu para {Step}.", message.MessageId, turn.NextStep);
+    }
+
+    private async Task<MenuTurn> AiTurnAsync(
+        CandidateMessage message,
+        MenuStep step,
+        SessionDraft draft,
+        IReadOnlyList<KnownCard> cards,
+        PayBotOptions settings,
+        CancellationToken cancellationToken)
+    {
+        var text = message.Text;
+        if (message.IsAudio)
+        {
+            if (!settings.TranscribeAvailable)
+                return AiEngine.Stay(step, draft, MenuTexts.AiTranscribeOff);
+
+            text = await TranscribeAsync(message, cancellationToken);
+            if (string.IsNullOrWhiteSpace(text))
+                return AiEngine.Stay(step, draft, MenuTexts.AiAudioFailed);
+            logger.LogInformation("Audio {MessageId} transcrito.", message.MessageId);
+        }
+
+        var direct = AiEngine.Direct(text, step, draft, cards);
+        if (direct is not null)
+            return direct;
+
+        var intent = await ai.InterpretAsync(text!, new AiContext(SaoPauloClock.Today(), cards, draft, step), cancellationToken);
+        if (intent is null)
+            return AiEngine.Stay(step, draft, MenuTexts.AiFailed);
+
+        return AiEngine.Interpret(intent, step, draft, cards);
+    }
+
+    private async Task<string?> TranscribeAsync(CandidateMessage message, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(message.RawJson))
+            return null;
+
+        var media = await evolution.GetMediaBase64Async(message.RawJson, cancellationToken);
+        if (media is not { } audio || audio.Content.Length == 0)
+            return null;
+
+        return await ai.TranscribeAsync(audio.Content, audio.MimeType, cancellationToken);
     }
 
     private static string FailureReply(MenuStep step) => step switch

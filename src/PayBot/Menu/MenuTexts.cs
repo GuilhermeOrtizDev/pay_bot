@@ -18,6 +18,48 @@ public static class MenuTexts
         7 - Exemplos
         """;
 
+    public const string AiOption = "\n8 - Modo IA";
+
+    public static string MainMenu(bool ai) => ai ? Main + AiOption : Main;
+
+    public const string AiModeOn = """
+        Modo IA ativado. O menu esta desligado.
+        Escreva o que quer fazer. Ex: "gastei 32,50 no mercado no pix", "resumo do mes em pdf", "apagar o mercado de ontem".
+        Para sair, envie: desativar IA
+        """;
+
+    public const string AiModeOff = "Modo IA desativado.";
+    public const string AiHelp = "Nao entendi. Diga um gasto, uma entrada, um resumo ou o que quer remover. Para sair, envie: desativar IA";
+    public const string AiFailed = "Nao consegui falar com a IA agora. Tente de novo.";
+    public const string AiTranscribeOff = "Transcricao de audio desativada. Envie em texto.";
+    public const string AiAudioFailed = "Nao consegui entender o audio. Repita ou envie em texto.";
+    public const string AiCancelled = "Cancelado. Nada foi alterado.";
+    public const string AiDeleteChoice = "Responda com o numero do registro, ou nao para cancelar.";
+
+    public static string AiConfirm(string line) => $"Vou registrar: {line}\nResponda sim ou nao.";
+
+    public static string AiDeleteConfirm(int index) => $"Remover o registro {index}? Responda sim ou nao.";
+
+    public static string AiMissing(IReadOnlyList<string> fields)
+    {
+        var builder = new StringBuilder("Falta informar:");
+        foreach (var field in fields)
+            builder.Append($"\n- {AiFieldLabel(field)} (ex: {BulkExample(field)})");
+        return builder.ToString();
+    }
+
+    private static string AiFieldLabel(string field) => field switch
+    {
+        "tipo" => "forma de pagamento (pix, cartao credito, cartao debito, retirada, despesa fixa, outros)",
+        "cobranca" => "cobranca do cartao (parcelas, a vista, fixo)",
+        "parcelas" => "numero de parcelas",
+        "valor" => "valor",
+        "cartao" => "nome do cartao",
+        "descricao" => "descricao",
+        "mes" => "mes da cobranca",
+        _ => field
+    };
+
     public const string BulkPrompt = """
         Registrar em texto
         Envie o texto do lancamento.
@@ -133,9 +175,11 @@ public static class MenuTexts
     public static string WithMonthBalance(string reply, DateOnly month, decimal balance)
     {
         var line = $"Saldo de {month.ToString("MM/yyyy", CultureInfo.InvariantCulture)}: {Money(balance)}";
-        var menu = "\n\n" + Main;
-        if (reply.EndsWith(menu, StringComparison.Ordinal))
-            return string.Concat(reply.AsSpan(0, reply.Length - menu.Length), "\n", line, menu);
+        foreach (var menu in new[] { "\n\n" + MainMenu(true), "\n\n" + Main })
+        {
+            if (reply.EndsWith(menu, StringComparison.Ordinal))
+                return string.Concat(reply.AsSpan(0, reply.Length - menu.Length), "\n", line, menu);
+        }
 
         return reply + "\n\n" + line;
     }
