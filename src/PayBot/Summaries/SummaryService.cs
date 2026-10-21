@@ -22,7 +22,8 @@ public sealed class SummaryService(PayBotDbContext db)
                 entry.Description,
                 entry.Card != null ? entry.Card.Name : null,
                 entry.Installments,
-                entry.IsFixed))
+                entry.IsFixed,
+                entry.CreatedAt))
             .ToListAsync(cancellationToken);
 
         return SummaryAggregator.Build(query.Title, rows);

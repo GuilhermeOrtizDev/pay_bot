@@ -133,7 +133,7 @@ public sealed class InboundProcessor(
         if (turn.Expense is not null)
             await AddExpenseAsync(tenant, turn.Expense, message.MessageId, now, cancellationToken);
         if (turn.Income is not null)
-            AddIncome(tenant, turn.Income, message.MessageId);
+            AddIncome(tenant, turn.Income, message.MessageId, now);
         if (turn.Admin is not null)
             await ApplyAdminAsync(turn.Admin, now, cancellationToken);
 
@@ -398,6 +398,7 @@ public sealed class InboundProcessor(
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId,
+            CreatedAt = now,
             OccurredAt = expense.ChargeMonth is null ? now : SaoPauloClock.AtNoon(chargeDate),
             LocalDate = chargeDate,
             Direction = Direction.Expense,
@@ -417,11 +418,27 @@ public sealed class InboundProcessor(
         if (request.From is DateOnly from && request.To is DateOnly to)
             query = query.Where(entry => entry.LocalDate >= from && entry.LocalDate <= to);
 
-        return await query
-            .OrderByDescending(entry => entry.LocalDate)
-            .ThenByDescending(entry => entry.OccurredAt)
+        var entries = await query.ToListAsync(cancellationToken);
+        return OrderDeleteCandidates(entries, request);
+    }
+
+    internal static List<LedgerEntry> OrderDeleteCandidates(IEnumerable<LedgerEntry> entries, DeleteListRequest request)
+    {
+        if (request.From is DateOnly from && request.To is DateOnly to)
+        {
+            return entries
+                .Where(entry => entry.LocalDate >= from && entry.LocalDate <= to)
+                .OrderByDescending(entry => entry.LocalDate)
+                .ThenByDescending(entry => entry.OccurredAt)
+                .Take(request.Take)
+                .ToList();
+        }
+
+        return entries
+            .OrderByDescending(entry => entry.CreatedAt)
+            .ThenByDescending(entry => entry.Id)
             .Take(request.Take)
-            .ToListAsync(cancellationToken);
+            .ToList();
     }
 
     private async Task<string> AppendMonthBalanceAsync(Guid tenantId, string reply, MenuTurn turn, DateTimeOffset now, CancellationToken cancellationToken)
@@ -439,12 +456,13 @@ public sealed class InboundProcessor(
         }
     }
 
-    private void AddIncome(Guid tenantId, PendingIncome income, string messageId)
+    private void AddIncome(Guid tenantId, PendingIncome income, string messageId, DateTimeOffset now)
     {
         db.Transactions.Add(new LedgerEntry
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId,
+            CreatedAt = now,
             OccurredAt = SaoPauloClock.AtNoon(income.ChargeMonth),
             LocalDate = income.ChargeMonth,
             Direction = Direction.Income,

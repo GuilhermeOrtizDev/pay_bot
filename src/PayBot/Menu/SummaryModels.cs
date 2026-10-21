@@ -10,7 +10,8 @@ public sealed record SummaryRow(
     string? Description,
     string? CardName,
     int? Installments,
-    bool IsFixed = false);
+    bool IsFixed = false,
+    DateTimeOffset CreatedAt = default);
 
 public sealed record CardSpend(string Name, decimal Amount, int? Installments);
 
@@ -46,7 +47,8 @@ public static class SummaryAggregator
             .ToList();
         var expenses = rows
             .Where(row => row.Direction == Direction.Expense)
-            .OrderBy(row => row.LocalDate)
+            .OrderBy(row => row.CreatedAt)
+            .ThenBy(row => row.LocalDate)
             .ThenBy(row => row.Description)
             .ToList();
 
@@ -57,7 +59,8 @@ public static class SummaryAggregator
                 group.Sum(row => row.Amount),
                 group.Key is PaymentMethod.CreditCard or PaymentMethod.DebitCard
                     ? group
-                        .OrderBy(row => row.LocalDate)
+                        .OrderBy(row => row.CreatedAt)
+                        .ThenBy(row => row.LocalDate)
                         .ThenBy(row => row.CardName)
                         .Select(row => new CardSpend(row.CardName ?? "Cartao", row.Amount, row.Installments))
                         .ToList()
