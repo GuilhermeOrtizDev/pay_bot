@@ -127,15 +127,25 @@ public class SummaryTests
         WhatsAppMessageId = Guid.NewGuid().ToString("N")
     };
 
-    private static LedgerEntry Expense(DateOnly date, decimal amount, PaymentMethod method, Card? card = null, int? installments = null, Guid? tenant = null) => new()
+    private static LedgerEntry Expense(
+        DateOnly date,
+        decimal amount,
+        PaymentMethod method,
+        Card? card = null,
+        int? installments = null,
+        Guid? tenant = null,
+        DateTimeOffset? createdAt = null,
+        string? description = null) => new()
     {
         Id = Guid.NewGuid(),
         TenantId = tenant ?? TestDb.Tenant,
+        CreatedAt = createdAt ?? date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
         OccurredAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
         LocalDate = date,
         Direction = Direction.Expense,
         Amount = amount,
         PaymentMethod = method,
+        Description = description,
         Installments = installments,
         CardId = card?.Id,
         Card = card,
@@ -209,6 +219,56 @@ public class SummaryTests
         Assert.Contains("03/10/2026 Pix: R$ 50,00 - padaria", text);
         Assert.Contains("05/10/2026 Cartao credito Nubank em 10x: R$ 1.200,00 - mercado", text);
         Assert.Contains("02/10/2026 salario: R$ 3.000,00", text);
+    }
+
+    [Fact]
+    public async Task Summary_orders_expenses_by_created_at()
+    {
+        await using var db = await TestDb.CreateAsync();
+        var nubank = Card(CardKind.Credit, "Nubank");
+        var inter = Card(CardKind.Credit, "Inter");
+        db.Cards.AddRange(nubank, inter);
+        var first = new DateTimeOffset(2026, 10, 10, 12, 0, 0, TimeSpan.Zero);
+        var second = first.AddDays(1);
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 20), 50, PaymentMethod.Pix, createdAt: second, description: "padaria"));
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 1), 80, PaymentMethod.CreditCard, nubank, createdAt: first, description: "mercado"));
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 2), 30, PaymentMethod.CreditCard, inter, createdAt: second.AddHours(1), description: "netflix"));
+        await db.SaveChangesAsync();
+
+        var report = await new SummaryService(db).BuildAsync(
+            TestDb.Tenant,
+            new SummaryQuery(null, null, "Resumo total"),
+            CancellationToken.None);
+        var text = SummaryFormatter.Format(report);
+        var pdf = System.Text.Encoding.ASCII.GetString(SummaryPdf.Render(report));
+
+        Assert.Equal(["mercado", "padaria", "netflix"], report.Expenses.Select(line => line.Description));
+        Assert.True(text.IndexOf("Nubank", StringComparison.Ordinal) < text.IndexOf("Inter", StringComparison.Ordinal));
+        Assert.True(pdf.IndexOf("mercado", StringComparison.Ordinal) < pdf.IndexOf("padaria", StringComparison.Ordinal));
+        Assert.True(pdf.IndexOf("padaria", StringComparison.Ordinal) < pdf.IndexOf("netflix", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Latest_delete_candidates_follow_created_at()
+    {
+        await using var db = await TestDb.CreateAsync();
+        var older = new DateTimeOffset(2026, 10, 10, 12, 0, 0, TimeSpan.Zero);
+        var newer = older.AddDays(2);
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 20), 10, PaymentMethod.Pix, createdAt: older, description: "antigo"));
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 1), 20, PaymentMethod.Pix, createdAt: newer, description: "recente"));
+        db.Transactions.Add(Expense(new DateOnly(2026, 9, 1), 30, PaymentMethod.Pix, createdAt: newer.AddMinutes(1), description: "ultimo"));
+        await db.SaveChangesAsync();
+
+        var entries = await db.Transactions.ToListAsync();
+        var latest = PayBot.Webhooks.InboundProcessor
+            .OrderDeleteCandidates(entries, new DeleteListRequest(null, null, 10))
+            .Select(entry => entry.Description);
+        var ranged = PayBot.Webhooks.InboundProcessor
+            .OrderDeleteCandidates(entries, new DeleteListRequest(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31), 30))
+            .Select(entry => entry.Description);
+
+        Assert.Equal(["ultimo", "recente", "antigo"], latest);
+        Assert.Equal(["antigo", "recente"], ranged);
     }
 }
 
