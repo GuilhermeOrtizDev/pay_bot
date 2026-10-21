@@ -347,6 +347,7 @@ public class MenuEngineTests
         var entry = Act("6", MenuStep.Main);
         Assert.Equal(MenuStep.AwaitingBulkEntry, entry.NextStep);
         Assert.Contains("Envie o texto do lancamento.", entry.Reply);
+        Assert.Contains("1 - Registro exemplo", entry.Reply);
         Assert.Null(entry.Expense);
 
         var repeated = Act("oi", entry.NextStep);
@@ -363,7 +364,7 @@ public class MenuEngineTests
         Assert.Equal(32.50m, saved.Expense!.Amount);
         Assert.Equal("mercado", saved.Expense.Description);
 
-        var examples = Act("7", MenuStep.Main);
+        var examples = Act("1", entry.NextStep);
         Assert.Equal(MenuStep.ExampleMenu, examples.NextStep);
         Assert.Contains("1 - Pix", examples.Reply);
         Assert.Contains("2 - Cartao credito em parcelas", examples.Reply);
@@ -390,7 +391,8 @@ public class MenuEngineTests
         var back = Act("0", income.NextStep);
         Assert.Equal(MenuStep.Main, back.NextStep);
         Assert.Contains("6 - Registrar em texto", back.Reply);
-        Assert.Contains("7 - Exemplos", back.Reply);
+        Assert.DoesNotContain("Exemplos", back.Reply);
+        Assert.DoesNotContain("Registro exemplo", back.Reply);
     }
 
     [Theory]
@@ -644,24 +646,24 @@ public class MenuEngineTests
     public void Ai_option_is_hidden_and_ignored_when_ai_is_off()
     {
         var menu = Act("x", MenuStep.Main);
-        Assert.DoesNotContain("8 - Modo IA", menu.Reply);
+        Assert.DoesNotContain("7 - Modo IA", menu.Reply);
 
-        var eight = Act("8", MenuStep.Main);
-        Assert.Equal(MenuStep.Main, eight.NextStep);
-        Assert.DoesNotContain("8 - Modo IA", eight.Reply);
+        var seven = Act("7", MenuStep.Main);
+        Assert.Equal(MenuStep.Main, seven.NextStep);
+        Assert.DoesNotContain("7 - Modo IA", seven.Reply);
     }
 
     [Fact]
     public void Ai_option_shows_in_every_main_menu_and_enters_ai_mode()
     {
         var menu = Act("x", MenuStep.Main, ai: true);
-        Assert.EndsWith("7 - Exemplos" + MenuTexts.AiOption, menu.Reply);
+        Assert.EndsWith("6 - Registrar em texto" + MenuTexts.AiOption, menu.Reply);
 
         var saved = Act("pao", MenuStep.AwaitingExpenseDescription, new SessionDraft { Method = PaymentMethod.Pix, Amount = 10m }, ai: true);
         Assert.NotNull(saved.Expense);
         Assert.EndsWith(MenuTexts.AiOption, saved.Reply);
 
-        var ai = Act("8", MenuStep.Main, ai: true);
+        var ai = Act("7", MenuStep.Main, ai: true);
         Assert.Equal(MenuStep.AiMode, ai.NextStep);
         Assert.Contains("desativar IA", ai.Reply);
     }
@@ -680,7 +682,7 @@ public class MenuEngineTests
         var reply = "Gasto registrado: Pix R$ 10,00 - pao\n\n" + MenuTexts.MainMenu(true);
         var text = MenuTexts.WithMonthBalance(reply, new DateOnly(2026, 10, 1), 5m).Replace("\r\n", "\n");
         Assert.Contains("Saldo de 10/2026: R$ 5,00\n\n1 - Registrar gasto", text);
-        Assert.EndsWith("8 - Modo IA", text);
+        Assert.EndsWith("7 - Modo IA", text);
     }
 
     private static MenuTurn Act(

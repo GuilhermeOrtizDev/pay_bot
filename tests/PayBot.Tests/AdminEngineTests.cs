@@ -29,7 +29,7 @@ public class AdminEngineTests
         Assert.Equal(MenuTexts.Main, turn.Reply);
 
         var ai = AdminEngine.Handle("0", MenuStep.AdminMenu, new SessionDraft(), [], [], aiAvailable: true);
-        Assert.EndsWith("8 - Modo IA", ai.Reply);
+        Assert.EndsWith("7 - Modo IA", ai.Reply);
     }
 
     [Fact]

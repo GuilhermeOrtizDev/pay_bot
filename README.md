@@ -54,7 +54,7 @@ Para administrar, envie `*000` em um grupo que ja tenha tenant. A opcao nao apar
 
 ## Modo IA
 
-Com `AI_ENABLED=true` e `OPENAI_API_KEY` no `.env`, o menu ganha a opcao `8 - Modo IA`. Nesse modo o menu numerico fica desligado: escreva em texto livre ("gastei 32,50 no mercado no pix", "resumo do mes em pdf", "apagar o mercado de ontem"). A IA pede o que faltar e o bot so grava ou apaga depois de `sim`. Para sair, envie `desativar IA`.
+Com `AI_ENABLED=true` e `OPENAI_API_KEY` no `.env`, o menu ganha a opcao `7 - Modo IA`. Nesse modo o menu numerico fica desligado: escreva em texto livre ("gastei 32,50 no mercado no pix", "resumo do mes em pdf", "apagar o mercado de ontem"). A IA pede o que faltar e o bot so grava ou apaga depois de `sim`. Para sair, envie `desativar IA`.
 
 Com `AI_TRANSCRIBE_ENABLED=true`, audios enviados no Modo IA sao transcritos e tratados como texto. Fora do Modo IA, audio e ignorado.
 
