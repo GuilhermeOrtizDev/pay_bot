@@ -68,7 +68,7 @@ public static class MenuEngine
     {
         if (BulkEntry.IsBlock(text))
             return CompleteBulk(BulkEntry.ReadBlock(text, cards));
-        if (aiAvailable && text == "8")
+        if (aiAvailable && text == "7")
             return Stay(MenuStep.AiMode, new SessionDraft(), MenuTexts.AiModeOn);
 
         return text switch
@@ -79,13 +79,14 @@ public static class MenuEngine
             "4" => new MenuTurn(MenuTexts.Remove, MenuStep.RemoveMenu, new SessionDraft(), null, null, null),
             "5" => Pause(),
             "6" => Stay(MenuStep.AwaitingBulkEntry, new SessionDraft(), MenuTexts.BulkPrompt),
-            "7" => Stay(MenuStep.ExampleMenu, new SessionDraft(), MenuTexts.Examples),
             _ => OpenMain()
         };
     }
 
     private static MenuTurn OnBulkEntry(string text, IReadOnlyList<KnownCard> cards)
     {
+        if (text == "1")
+            return Stay(MenuStep.ExampleMenu, new SessionDraft(), MenuTexts.Examples);
         if (!BulkEntry.IsBlock(text))
             return Stay(MenuStep.AwaitingBulkEntry, new SessionDraft(), MenuTexts.BulkPrompt);
         return CompleteBulk(BulkEntry.ReadBlock(text, cards));

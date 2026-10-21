@@ -37,7 +37,7 @@ public class AiEngineTests
             Assert.NotNull(turn);
             Assert.Equal(MenuStep.Main, turn.NextStep);
             Assert.Contains("Modo IA desativado", turn.Reply);
-            Assert.EndsWith("8 - Modo IA", turn.Reply);
+            Assert.EndsWith("7 - Modo IA", turn.Reply);
         }
     }
 

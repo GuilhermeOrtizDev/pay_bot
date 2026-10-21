@@ -15,10 +15,9 @@ public static class MenuTexts
         4 - Remover
         5 - Desativar bot
         6 - Registrar em texto
-        7 - Exemplos
         """;
 
-    public const string AiOption = "\n8 - Modo IA";
+    public const string AiOption = "\n7 - Modo IA";
 
     public static string MainMenu(bool ai) => ai ? Main + AiOption : Main;
 
@@ -64,6 +63,7 @@ public static class MenuTexts
         Registrar em texto
         Envie o texto do lancamento.
         0 - Voltar Menu Inicial
+        1 - Registro exemplo
         """;
 
     public const string Examples = """
