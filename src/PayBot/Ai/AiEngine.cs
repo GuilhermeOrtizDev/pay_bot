@@ -84,6 +84,7 @@ public static class AiEngine
                 || draft.Method is not null
                 || draft.Amount is not null
                 || draft.Installments is not null
+                || draft.AmountKind is not null
                 || draft.Billing is not null
                 || !string.IsNullOrWhiteSpace(draft.CardName)
                 || !string.IsNullOrWhiteSpace(draft.Description)
@@ -98,6 +99,8 @@ public static class AiEngine
             fields["cobranca"] = BillingField(billing);
         if (draft.Installments is int installments)
             fields["parcelas"] = installments.ToString(CultureInfo.InvariantCulture);
+        if (draft.AmountKind is InstallmentAmountKind kind)
+            fields["valor_tipo"] = kind == InstallmentAmountKind.Installment ? "parcela" : "total";
         if (draft.Amount is decimal amount)
             fields["valor"] = amount.ToString("0.00", MenuTexts.PtBr);
         if (!string.IsNullOrWhiteSpace(draft.CardName))

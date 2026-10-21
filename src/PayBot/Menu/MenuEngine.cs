@@ -44,6 +44,7 @@ public static class MenuEngine
             MenuStep.AwaitingDebitCharge => OnDebitCharge(text, draft),
             MenuStep.AwaitingAmount => OnAmount(text, draft, cards),
             MenuStep.AwaitingInstallments => OnInstallments(text, draft),
+            MenuStep.AwaitingInstallmentAmountKind => OnInstallmentAmountKind(text, draft),
             MenuStep.AwaitingCardChoice => OnCardChoice(text, draft, cards),
             MenuStep.AwaitingNewCardName => OnNewCard(text, draft, cards),
             MenuStep.AwaitingExpenseDescription => OnExpenseDescription(text, draft),
@@ -138,6 +139,7 @@ public static class MenuEngine
         draft.Method = method;
         draft.Amount = null;
         draft.Installments = null;
+        draft.AmountKind = null;
         draft.Billing = null;
         draft.CardId = null;
         draft.CardName = null;
@@ -167,6 +169,7 @@ public static class MenuEngine
 
         draft.Billing = billing;
         draft.Installments = null;
+        draft.AmountKind = null;
         if (billing == CardBilling.Installments)
             return Stay(MenuStep.AwaitingInstallments, draft, MenuTexts.AskInstallments);
 
@@ -197,6 +200,11 @@ public static class MenuEngine
             return OpenMain();
         if (!MoneyParser.TryParse(text, out var amount))
             return Stay(MenuStep.AwaitingAmount, draft, MenuTexts.InvalidAmount);
+        if (draft.Billing == CardBilling.Installments
+            && draft.Installments is int count
+            && draft.AmountKind is InstallmentAmountKind kind
+            && !InstallmentSchedule.TryAmounts(amount, count, kind, out _))
+            return Stay(MenuStep.AwaitingAmount, draft, MenuTexts.InvalidAmount);
 
         draft.Amount = amount;
         if (draft.Method is PaymentMethod.CreditCard or PaymentMethod.DebitCard)
@@ -213,6 +221,33 @@ public static class MenuEngine
             return Stay(MenuStep.AwaitingInstallments, draft, MenuTexts.InvalidInstallments);
 
         draft.Installments = count;
+        draft.AmountKind = null;
+        if (count == 1)
+        {
+            draft.AmountKind = InstallmentAmountKind.Installment;
+            return Stay(MenuStep.AwaitingAmount, draft, MenuTexts.AskAmount);
+        }
+
+        return Stay(MenuStep.AwaitingInstallmentAmountKind, draft, MenuTexts.InstallmentAmountKindMenu);
+    }
+
+    private static MenuTurn OnInstallmentAmountKind(string text, SessionDraft draft)
+    {
+        if (draft.Method != PaymentMethod.CreditCard
+            || draft.Billing != CardBilling.Installments
+            || draft.Installments is null or <= 1)
+            return OpenMain();
+
+        var kind = text switch
+        {
+            "1" => InstallmentAmountKind.Installment,
+            "2" => InstallmentAmountKind.Total,
+            _ => (InstallmentAmountKind?)null
+        };
+        if (kind is null)
+            return Stay(MenuStep.AwaitingInstallmentAmountKind, draft, MenuTexts.InstallmentAmountKindMenu);
+
+        draft.AmountKind = kind;
         return Stay(MenuStep.AwaitingAmount, draft, MenuTexts.AskAmount);
     }
 
@@ -452,6 +487,7 @@ public static class MenuEngine
         var installments = method == PaymentMethod.CreditCard && draft.Billing == CardBilling.Installments
             ? draft.Installments
             : null;
+        var amountKind = installments is > 0 ? draft.AmountKind : null;
         return new PendingExpense(
             method,
             draft.Amount!.Value,
@@ -461,18 +497,30 @@ public static class MenuEngine
             draft.CreateCard,
             draft.Description!.Trim(),
             draft.Billing == CardBilling.Fixed,
-            draft.ChargeMonth);
+            draft.ChargeMonth,
+            amountKind);
     }
 
     internal static string ExpenseLine(SessionDraft draft)
     {
         var expense = ToExpense(draft);
         var cardPart = string.IsNullOrWhiteSpace(expense.CardName) ? "" : $" {expense.CardName.Trim()}";
+        var shown = expense.Amount;
         var billing = BillingLabel(expense.Method, draft.Billing, expense.Installments);
+        if (expense.Installments is int count
+            && expense.AmountKind is InstallmentAmountKind kind
+            && InstallmentSchedule.TryAmounts(expense.Amount, count, kind, out var amounts))
+        {
+            shown = amounts[0];
+            var total = amounts.Sum();
+            var last = amounts[^1] == shown ? "" : $", ultima {MenuTexts.Money(amounts[^1])}";
+            billing = $" em {count}x (total {MenuTexts.Money(total)}{last})";
+        }
+
         var start = expense.ChargeMonth is DateOnly month
             ? $" a partir de {month.ToString("MM/yyyy", CultureInfo.InvariantCulture)}"
             : "";
-        return $"{MenuTexts.MethodLabel(expense.Method)}{cardPart} {MenuTexts.Money(expense.Amount)}{billing}{start} - {expense.Description}";
+        return $"{MenuTexts.MethodLabel(expense.Method)}{cardPart} {MenuTexts.Money(shown)}{billing}{start} - {expense.Description}";
     }
 
     private static string BillingLabel(PaymentMethod method, CardBilling? billing, int? installments)

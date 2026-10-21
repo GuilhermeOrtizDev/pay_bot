@@ -52,6 +52,7 @@ public static class MenuTexts
         "tipo" => "forma de pagamento (pix, cartao credito, cartao debito, retirada, despesa fixa, outros)",
         "cobranca" => "cobranca do cartao (parcelas, a vista, fixo)",
         "parcelas" => "numero de parcelas",
+        "valor_tipo" => "se o valor e da parcela ou o total (parcela, total)",
         "valor" => "valor",
         "cartao" => "nome do cartao",
         "descricao" => "descricao",
@@ -138,6 +139,13 @@ public static class MenuTexts
 
     public const string AskAmount = "Informe o valor";
     public const string AskInstallments = "Numero de parcelas";
+
+    public const string InstallmentAmountKindMenu = """
+        O valor informado e
+        0 - Voltar Menu Inicial
+        1 - Valor da parcela
+        2 - Valor total
+        """;
     public const string AskCardName = "Informe o nome do cartao";
     public const string AskDescription = "Informe a descricao";
     public const string AskPeriod = "Informe o periodo. Ex: 10/05/2026 - 20/05/2026";
@@ -247,6 +255,7 @@ public static class MenuTexts
             tipo: cartao credito
             cobranca: parcelas
             parcelas: 10
+            valor_tipo: total
             valor: 1200,00
             cartao: Nubank
             descricao: notebook
@@ -342,6 +351,7 @@ public static class MenuTexts
         "tipo" => "pix",
         "cobranca" => "parcelas",
         "parcelas" => "10",
+        "valor_tipo" => "total",
         "valor" => "32,50",
         "cartao" => "Nubank",
         "descricao" => "mercado",

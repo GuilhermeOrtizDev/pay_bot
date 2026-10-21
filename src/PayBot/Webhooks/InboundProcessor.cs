@@ -344,6 +344,7 @@ public sealed class InboundProcessor(
         MenuStep.AwaitingAmount or MenuStep.AwaitingIncomeAmount => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskAmount,
         MenuStep.AwaitingExpenseDescription or MenuStep.AwaitingIncomeDescription => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskDescription,
         MenuStep.AwaitingInstallments => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskInstallments,
+        MenuStep.AwaitingInstallmentAmountKind => MenuTexts.SaveFailed + "\n\n" + MenuTexts.InstallmentAmountKindMenu,
         MenuStep.AwaitingNewCardName => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskCardName,
         MenuStep.AdminAwaitingTenantName => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskTenantName,
         MenuStep.AdminAwaitingGroupJid => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskGroupJid,
@@ -393,24 +394,68 @@ public sealed class InboundProcessor(
             }
         }
 
-        var chargeDate = expense.ChargeMonth ?? SaoPauloClock.LocalDate(now);
-        db.Transactions.Add(new LedgerEntry
+        var local = SaoPauloClock.LocalDate(now);
+        var start = expense.ChargeMonth ?? new DateOnly(local.Year, local.Month, 1);
+        if (expense.Installments is int count
+            && expense.AmountKind is InstallmentAmountKind amountKind
+            && InstallmentSchedule.TryBuild(expense.Amount, count, amountKind, start, out var months))
         {
-            Id = Guid.NewGuid(),
-            TenantId = tenantId,
-            CreatedAt = now,
-            OccurredAt = expense.ChargeMonth is null ? now : SaoPauloClock.AtNoon(chargeDate),
-            LocalDate = chargeDate,
-            Direction = Direction.Expense,
-            Amount = expense.Amount,
-            PaymentMethod = expense.Method,
-            Description = expense.Description,
-            Installments = expense.Installments,
-            IsFixed = expense.IsFixed,
-            CardId = cardId,
-            WhatsAppMessageId = messageId
-        });
+            for (var index = 0; index < months.Count; index++)
+            {
+                var month = months[index];
+                db.Transactions.Add(Entry(
+                    tenantId,
+                    expense,
+                    month.Amount,
+                    month.Date,
+                    SaoPauloClock.AtNoon(month.Date),
+                    count,
+                    cardId,
+                    InstallmentSchedule.EntryMessageId(messageId, index + 1),
+                    now));
+            }
+
+            return;
+        }
+
+        var chargeDate = expense.ChargeMonth ?? local;
+        db.Transactions.Add(Entry(
+            tenantId,
+            expense,
+            expense.Amount,
+            chargeDate,
+            expense.ChargeMonth is null ? now : SaoPauloClock.AtNoon(chargeDate),
+            expense.Installments,
+            cardId,
+            messageId,
+            now));
     }
+
+    private static LedgerEntry Entry(
+        Guid tenantId,
+        PendingExpense expense,
+        decimal amount,
+        DateOnly date,
+        DateTimeOffset occurredAt,
+        int? installments,
+        Guid? cardId,
+        string messageId,
+        DateTimeOffset now) => new()
+    {
+        Id = Guid.NewGuid(),
+        TenantId = tenantId,
+        CreatedAt = now,
+        OccurredAt = occurredAt,
+        LocalDate = date,
+        Direction = Direction.Expense,
+        Amount = amount,
+        PaymentMethod = expense.Method,
+        Description = expense.Description,
+        Installments = installments,
+        IsFixed = expense.IsFixed,
+        CardId = cardId,
+        WhatsAppMessageId = messageId
+    };
 
     private async Task<List<LedgerEntry>> LoadDeleteCandidatesAsync(Guid tenantId, DeleteListRequest request, CancellationToken cancellationToken)
     {
