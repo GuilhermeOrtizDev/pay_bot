@@ -45,6 +45,7 @@ public static class BotEcho
         "Bot desativado",
         "Bot ativado",
         "Numero de parcelas",
+        "O valor informado",
         "Valor invalido",
         "Numero de parcelas invalido",
         "Periodo invalido",

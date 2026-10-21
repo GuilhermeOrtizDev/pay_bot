@@ -29,6 +29,12 @@ public enum CardBilling
     Fixed = 3
 }
 
+public enum InstallmentAmountKind
+{
+    Installment = 1,
+    Total = 2
+}
+
 public enum MenuStep
 {
     Main = 0,
@@ -62,5 +68,6 @@ public enum MenuStep
     AdminAwaitingTenantName = 28,
     AdminAwaitingGroupJid = 29,
     AdminAwaitingLinkGroup = 30,
-    AdminAwaitingLinkTenant = 31
+    AdminAwaitingLinkTenant = 31,
+    AwaitingInstallmentAmountKind = 32
 }

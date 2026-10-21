@@ -103,7 +103,15 @@ public class MenuEngineTests
         var chosen = Act("2", MenuStep.ExpenseMenu);
         var parcels = Act("1", chosen.NextStep, chosen.Draft);
         var count = Act("10", parcels.NextStep, parcels.Draft);
-        var amount = Act("1.200,00", count.NextStep, count.Draft, Cards());
+        Assert.Equal(MenuStep.AwaitingInstallmentAmountKind, count.NextStep);
+        Assert.Contains("1 - Valor da parcela", count.Reply);
+        Assert.Contains("2 - Valor total", count.Reply);
+
+        var ignored = Act("9", count.NextStep, count.Draft);
+        Assert.Equal(MenuStep.AwaitingInstallmentAmountKind, ignored.NextStep);
+
+        var kind = Act("2", ignored.NextStep, ignored.Draft);
+        var amount = Act("1.200,00", kind.NextStep, kind.Draft, Cards());
         Assert.Equal(MenuStep.AwaitingCardChoice, amount.NextStep);
         Assert.Contains("Nubank", amount.Reply);
         Assert.DoesNotContain("Inter", amount.Reply);
@@ -120,7 +128,8 @@ public class MenuEngineTests
         Assert.False(saved.Expense.IsFixed);
         Assert.False(saved.Expense.CreateCard);
         Assert.Equal(1200m, saved.Expense.Amount);
-        Assert.Contains("em 10x", saved.Reply);
+        Assert.Equal(InstallmentAmountKind.Total, saved.Expense.AmountKind);
+        Assert.Contains("R$ 120,00 em 10x (total R$ 1.200,00)", saved.Reply);
         Assert.Contains("a partir de 11/2026", saved.Reply);
         Assert.Contains("Nubank", saved.Reply);
         Assert.Contains("mercado", saved.Reply);
@@ -146,6 +155,50 @@ public class MenuEngineTests
         Assert.Equal("aluguel", saved.Expense.Description);
         Assert.Contains(label, saved.Reply);
         Assert.Contains("a partir de 01/2027", saved.Reply);
+    }
+
+    [Fact]
+    public void One_installment_skips_the_amount_kind_question()
+    {
+        var chosen = Act("2", MenuStep.ExpenseMenu);
+        var parcels = Act("1", chosen.NextStep, chosen.Draft);
+        var count = Act("1", parcels.NextStep, parcels.Draft);
+
+        Assert.Equal(MenuStep.AwaitingAmount, count.NextStep);
+        Assert.Equal(InstallmentAmountKind.Installment, count.Draft.AmountKind);
+    }
+
+    [Fact]
+    public void Installment_amount_is_repeated_and_a_total_keeps_the_remainder_on_the_last_month()
+    {
+        var parcels = Act("1", MenuStep.AwaitingCreditCharge, new SessionDraft { Method = PaymentMethod.CreditCard });
+        var count = Act("10", parcels.NextStep, parcels.Draft);
+        var kind = Act("1", count.NextStep, count.Draft);
+        var amount = Act("120,00", kind.NextStep, kind.Draft, Cards());
+        var card = Act("1", amount.NextStep, amount.Draft, Cards());
+        var described = Act("notebook", card.NextStep, card.Draft, Cards());
+        var saved = Act("11/2026", described.NextStep, described.Draft, Cards());
+
+        Assert.Equal(120m, saved.Expense!.Amount);
+        Assert.Equal(InstallmentAmountKind.Installment, saved.Expense.AmountKind);
+        Assert.Contains("R$ 120,00 em 10x (total R$ 1.200,00)", saved.Reply);
+
+        var three = Act("3", MenuStep.AwaitingInstallments, new SessionDraft
+        {
+            Method = PaymentMethod.CreditCard,
+            Billing = CardBilling.Installments
+        });
+        var total = Act("2", three.NextStep, three.Draft);
+        var rejected = Act("0,02", total.NextStep, total.Draft, Cards());
+        Assert.Equal(MenuStep.AwaitingAmount, rejected.NextStep);
+        Assert.Null(rejected.Expense);
+
+        var accepted = Act("1000", rejected.NextStep, rejected.Draft, Cards());
+        var chosen = Act("1", accepted.NextStep, accepted.Draft, Cards());
+        var named = Act("notebook", chosen.NextStep, chosen.Draft, Cards());
+        var split = Act("10/2026", named.NextStep, named.Draft, Cards());
+        Assert.Equal(1000m, split.Expense!.Amount);
+        Assert.Contains("R$ 333,33 em 3x (total R$ 1.000,00, ultima R$ 333,34)", split.Reply);
     }
 
     [Fact]
@@ -443,6 +496,7 @@ public class MenuEngineTests
             tipo: cartão crédito
             cobranca: parcelas
             parcelas: 10
+            valor_tipo: total
             valor: 1.200,00
             cartao: nubank
             descricao: notebook
@@ -454,10 +508,35 @@ public class MenuEngineTests
         Assert.False(saved.Expense.CreateCard);
         Assert.Equal(10, saved.Expense.Installments);
         Assert.Equal(1200m, saved.Expense.Amount);
+        Assert.Equal(InstallmentAmountKind.Total, saved.Expense.AmountKind);
         Assert.Equal(new DateOnly(2026, 11, 1), saved.Expense.ChargeMonth);
         Assert.False(saved.Expense.IsFixed);
-        Assert.Contains("em 10x", saved.Reply);
+        Assert.Contains("R$ 120,00 em 10x (total R$ 1.200,00)", saved.Reply);
         Assert.Contains("a partir de 11/2026", saved.Reply);
+    }
+
+    [Fact]
+    public void Bulk_installments_ask_whether_the_amount_is_the_parcel_or_the_total()
+    {
+        var missing = Act("""
+            gasto
+            tipo: cartao credito
+            cobranca: parcelas
+            parcelas: 10
+            valor: 120
+            cartao: Nubank
+            descricao: notebook
+            mes: 11/2026
+            """, MenuStep.Main, cards: Cards());
+
+        Assert.Equal(MenuStep.AwaitingBulkFix, missing.NextStep);
+        Assert.Contains("- valor_tipo (ex: total)", missing.Reply);
+        Assert.Null(missing.Expense);
+
+        var saved = Act("valor_tipo: parcela", missing.NextStep, missing.Draft, Cards());
+        Assert.Equal(120m, saved.Expense!.Amount);
+        Assert.Equal(InstallmentAmountKind.Installment, saved.Expense.AmountKind);
+        Assert.Contains("R$ 120,00 em 10x (total R$ 1.200,00)", saved.Reply);
     }
 
     [Fact]
@@ -538,6 +617,7 @@ public class MenuEngineTests
             tipo: cartao credito
             cobranca: parcelas
             parcelas: 10
+            valor_tipo: total
             valor: 1200
             cartao: Nubank
             descricao: notebook

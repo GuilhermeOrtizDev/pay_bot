@@ -57,7 +57,7 @@ public static class BulkEntry
     }
 
     private static bool IsField(string key) =>
-        key is "tipo" or "cobranca" or "parcelas" or "valor" or "cartao" or "descricao" or "mes";
+        key is "tipo" or "cobranca" or "parcelas" or "valor_tipo" or "valor" or "cartao" or "descricao" or "mes";
 
     private static Read Finish(SessionDraft draft, IReadOnlyList<KnownCard> cards)
     {
@@ -73,6 +73,8 @@ public static class BulkEntry
             draft.Billing = ParseBilling(billing);
         if (fields.TryGetValue("parcelas", out var installments))
             draft.Installments = ParseInstallments(installments);
+        if (fields.TryGetValue("valor_tipo", out var amountKind))
+            draft.AmountKind = ParseAmountKind(amountKind);
         if (fields.TryGetValue("valor", out var amount))
             draft.Amount = MoneyParser.TryParse(amount, out var parsed) ? parsed : null;
         if (fields.TryGetValue("cartao", out var card))
@@ -90,6 +92,7 @@ public static class BulkEntry
             draft.Method = null;
             draft.Billing = null;
             draft.Installments = null;
+            draft.AmountKind = null;
             ClearCard(draft);
             return;
         }
@@ -100,7 +103,10 @@ public static class BulkEntry
         if (draft.Method is PaymentMethod.CreditCard or PaymentMethod.DebitCard)
         {
             if (draft.Billing != CardBilling.Installments)
+            {
                 draft.Installments = null;
+                draft.AmountKind = null;
+            }
             if (draft.Method == PaymentMethod.DebitCard)
                 draft.ChargeMonth = null;
             ResolveCard(draft, cards);
@@ -111,6 +117,7 @@ public static class BulkEntry
         {
             draft.Billing = null;
             draft.Installments = null;
+            draft.AmountKind = null;
             ClearCard(draft);
             if (!NeedsMonth(draft.Method.Value))
                 draft.ChargeMonth = null;
@@ -139,7 +146,14 @@ public static class BulkEntry
             problems.Add("cobranca");
         if (draft.Billing == CardBilling.Installments && draft.Installments is null)
             problems.Add("parcelas");
+        if (draft.Billing == CardBilling.Installments && draft.AmountKind is null)
+            problems.Add("valor_tipo");
         if (draft.Amount is null)
+            problems.Add("valor");
+        else if (draft.Billing == CardBilling.Installments
+            && draft.Installments is int count
+            && draft.AmountKind is InstallmentAmountKind kind
+            && !InstallmentSchedule.TryAmounts(draft.Amount.Value, count, kind, out _))
             problems.Add("valor");
         if (card && string.IsNullOrWhiteSpace(draft.CardName))
             problems.Add("cartao");
@@ -201,6 +215,13 @@ public static class BulkEntry
         "parcelas" => CardBilling.Installments,
         "a vista" => CardBilling.InFull,
         "fixo" => CardBilling.Fixed,
+        _ => null
+    };
+
+    private static InstallmentAmountKind? ParseAmountKind(string text) => Fold(text) switch
+    {
+        "parcela" or "valor da parcela" => InstallmentAmountKind.Installment,
+        "total" or "valor total" or "valor cheio" => InstallmentAmountKind.Total,
         _ => null
     };
 

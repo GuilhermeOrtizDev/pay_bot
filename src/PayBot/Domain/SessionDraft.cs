@@ -5,6 +5,7 @@ public sealed class SessionDraft
     public PaymentMethod? Method { get; set; }
     public decimal? Amount { get; set; }
     public int? Installments { get; set; }
+    public InstallmentAmountKind? AmountKind { get; set; }
     public CardBilling? Billing { get; set; }
     public Guid? CardId { get; set; }
     public string? CardName { get; set; }
@@ -24,6 +25,7 @@ public sealed class SessionDraft
         Method = Method,
         Amount = Amount,
         Installments = Installments,
+        AmountKind = AmountKind,
         Billing = Billing,
         CardId = CardId,
         CardName = CardName,

@@ -13,7 +13,8 @@ public sealed record PendingExpense(
     bool CreateCard,
     string Description,
     bool IsFixed,
-    DateOnly? ChargeMonth);
+    DateOnly? ChargeMonth,
+    InstallmentAmountKind? AmountKind = null);
 
 public sealed record DeleteListRequest(DateOnly? From, DateOnly? To, int Take);
 

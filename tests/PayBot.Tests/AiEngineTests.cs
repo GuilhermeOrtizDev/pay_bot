@@ -59,7 +59,7 @@ public class AiEngineTests
     public void Sim_saves_the_expense_without_the_menu()
     {
         var pending = Interpret(
-            Expense(("tipo", "cartao credito"), ("cobranca", "parcelas"), ("parcelas", "10"), ("valor", "1200"), ("cartao", "nubank"), ("descricao", "notebook"), ("mes", "10/2026")),
+            Expense(("tipo", "cartao credito"), ("cobranca", "parcelas"), ("parcelas", "10"), ("valor_tipo", "total"), ("valor", "1200"), ("cartao", "nubank"), ("descricao", "notebook"), ("mes", "10/2026")),
             MenuStep.AiMode,
             new SessionDraft());
         Assert.Equal(MenuStep.AiAwaitingConfirm, pending.NextStep);
@@ -70,12 +70,26 @@ public class AiEngineTests
         Assert.NotNull(saved.Expense);
         Assert.Equal(PaymentMethod.CreditCard, saved.Expense.Method);
         Assert.Equal(1200m, saved.Expense.Amount);
+        Assert.Equal(InstallmentAmountKind.Total, saved.Expense.AmountKind);
         Assert.Equal(10, saved.Expense.Installments);
         Assert.Equal(NubankId, saved.Expense.CardId);
         Assert.False(saved.Expense.CreateCard);
         Assert.Equal(new DateOnly(2026, 10, 1), saved.Expense.ChargeMonth);
-        Assert.StartsWith("Gasto registrado: Cartao credito Nubank R$ 1.200,00 em 10x", saved.Reply);
+        Assert.StartsWith("Gasto registrado: Cartao credito Nubank R$ 120,00 em 10x (total R$ 1.200,00)", saved.Reply);
         Assert.DoesNotContain("1 - Registrar gasto", saved.Reply);
+    }
+
+    [Fact]
+    public void Installments_without_amount_kind_are_asked()
+    {
+        var pending = Interpret(
+            Expense(("tipo", "cartao credito"), ("cobranca", "parcelas"), ("parcelas", "10"), ("valor", "1200"), ("cartao", "nubank"), ("descricao", "notebook"), ("mes", "10/2026")),
+            MenuStep.AiMode,
+            new SessionDraft());
+
+        Assert.Equal(MenuStep.AiMode, pending.NextStep);
+        Assert.Contains("se o valor e da parcela ou o total", pending.Reply);
+        Assert.Null(pending.Expense);
     }
 
     [Fact]
@@ -193,11 +207,12 @@ public class AiEngineTests
     public void Parses_the_model_json()
     {
         var intent = OpenAiClient.ParseIntent("""
-            {"acao":"gasto","campos":{"tipo":"cartao credito","cobranca":"parcelas","parcelas":10,"valor":"1200,00","cartao":"Nubank","descricao":"notebook","mes":"10/2026"},"de":null,"ate":null,"formato":"texto","resposta":null}
+            {"acao":"gasto","campos":{"tipo":"cartao credito","cobranca":"parcelas","parcelas":10,"valor":"1200,00","valor_tipo":"total","cartao":"Nubank","descricao":"notebook","mes":"10/2026"},"de":null,"ate":null,"formato":"texto","resposta":null}
             """);
         Assert.NotNull(intent);
         Assert.Equal(AiAction.Expense, intent.Action);
         Assert.Equal("10", intent.Fields["parcelas"]);
+        Assert.Equal("total", intent.Fields["valor_tipo"]);
         Assert.Equal("Nubank", intent.Fields["cartao"]);
         Assert.False(intent.AsPdf);
 

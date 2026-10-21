@@ -15,7 +15,7 @@ public sealed class OpenAiClient(
     IOptions<PayBotOptions> options,
     ILogger<OpenAiClient> logger)
 {
-    private static readonly string[] FieldNames = ["tipo", "cobranca", "parcelas", "valor", "cartao", "descricao", "mes"];
+    private static readonly string[] FieldNames = ["tipo", "cobranca", "parcelas", "valor", "valor_tipo", "cartao", "descricao", "mes"];
 
     private const string Schema = """
         {
@@ -27,12 +27,13 @@ public sealed class OpenAiClient(
             "campos": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["tipo", "cobranca", "parcelas", "valor", "cartao", "descricao", "mes"],
+              "required": ["tipo", "cobranca", "parcelas", "valor", "valor_tipo", "cartao", "descricao", "mes"],
               "properties": {
                 "tipo": { "type": ["string", "null"] },
                 "cobranca": { "type": ["string", "null"] },
                 "parcelas": { "type": ["integer", "null"] },
                 "valor": { "type": ["string", "null"] },
+                "valor_tipo": { "type": ["string", "null"] },
                 "cartao": { "type": ["string", "null"] },
                 "descricao": { "type": ["string", "null"] },
                 "mes": { "type": ["string", "null"] }
@@ -62,6 +63,7 @@ public sealed class OpenAiClient(
         - cobranca (so cartao credito ou cartao debito): exatamente um de: parcelas, a vista, fixo. Assinatura ou cobranca mensal recorrente no cartao = fixo. Cartao debito nunca e parcelas. Em outros tipos, null.
         - parcelas: numero inteiro, so quando cobranca = parcelas.
         - valor: o valor que o usuario disse, no formato 1234,56. Nao converta valor de parcela em total nem o contrario.
+        - valor_tipo: exatamente um de: parcela, total. So quando cobranca = parcelas; nos outros casos, null. "10x de 120" ou "parcela de 120" = parcela. "1200 em 10x" ou valor total = total. Nao divida nem multiplique o valor. Se nao der para saber, null.
         - cartao: nome do cartao. Se corresponder a um cartao da lista, use o nome exato da lista.
         - descricao: curta, em minusculas, ex: mercado, uber, salario, notebook.
         - mes: MM/yyyy do mes de cobranca. Use so em cartao credito, despesa fixa, outros e entrada. Se o usuario nao disser o mes, use o mes de hoje; "proximo mes" = mes seguinte. Em pix, retirada e cartao debito, null.
