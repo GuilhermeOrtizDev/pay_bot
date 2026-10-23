@@ -8,9 +8,11 @@ public static class SummaryPdf
     public static byte[] Render(SummaryReport report)
     {
         var lines = new List<string> { report.Title, "" };
-        lines.Add($"Entradas: {MenuTexts.Money(report.IncomeTotal)}");
+        if (!report.ExpensesOnly)
+            lines.Add($"Entradas: {MenuTexts.Money(report.IncomeTotal)}");
         lines.Add($"Saidas: {MenuTexts.Money(report.ExpenseTotal)}");
-        lines.Add($"Saldo: {MenuTexts.Money(report.IncomeTotal - report.ExpenseTotal)}");
+        if (!report.ExpensesOnly)
+            lines.Add($"Saldo: {MenuTexts.Money(report.IncomeTotal - report.ExpenseTotal)}");
 
         if (report.Expenses.Count > 0)
         {

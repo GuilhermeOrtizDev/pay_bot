@@ -20,7 +20,12 @@ public sealed record DeleteListRequest(DateOnly? From, DateOnly? To, int Take);
 
 public sealed record PendingIncome(decimal Amount, string Description, DateOnly ChargeMonth);
 
-public sealed record SummaryQuery(DateOnly? From, DateOnly? To, string Title);
+public sealed record SummaryQuery(
+    DateOnly? From,
+    DateOnly? To,
+    string Title,
+    PaymentMethod? Method = null,
+    Guid? CardId = null);
 
 public sealed record AdminTenant(Guid Id, string Name);
 

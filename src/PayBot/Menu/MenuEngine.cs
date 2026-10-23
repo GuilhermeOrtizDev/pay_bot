@@ -55,9 +55,11 @@ public static class MenuEngine
             MenuStep.AwaitingBulkFix => OnBulkFix(text, draft, cards),
             MenuStep.AwaitingBulkEntry => OnBulkEntry(text, cards),
             MenuStep.ExampleMenu => OnExamples(text, cards),
-            MenuStep.SummaryMenu => OnSummary(text, today),
+            MenuStep.SummaryMenu => OnSummaryFilter(text, cards),
+            MenuStep.AwaitingSummaryCard => OnSummaryCard(text, draft, cards),
+            MenuStep.AwaitingSummaryPeriod => OnSummaryPeriod(text, draft, today),
             MenuStep.AwaitingSummaryOutput => OnSummaryOutput(text, draft),
-            MenuStep.AwaitingDateRange => OnDateRange(text),
+            MenuStep.AwaitingDateRange => OnDateRange(text, draft),
             MenuStep.RemoveMenu => OnRemove(text),
             MenuStep.AwaitingDeleteDateRange => OnDeleteDateRange(text),
             MenuStep.AwaitingDeleteChoice => OnDeleteChoice(text, draft),
@@ -366,14 +368,76 @@ public static class MenuEngine
         return $"{MenuTexts.Money(income.Amount)} a partir de {start} - {income.Description}";
     }
 
-    private static MenuTurn OnSummary(string text, DateOnly today) => text switch
+    private static MenuTurn OnSummaryFilter(string text, IReadOnlyList<KnownCard> cards)
     {
-        "1" => Period(StartOfMonth(today), EndOfMonth(today)),
-        "2" => Period(StartOfMonth(today.AddMonths(1)), EndOfMonth(today.AddMonths(1))),
-        "3" => Period(new DateOnly(today.Year, 1, 1), new DateOnly(today.Year, 12, 31)),
-        "4" => AskFormat(new SummaryQuery(null, null, "Resumo total")),
-        "5" => Stay(MenuStep.AwaitingDateRange, new SessionDraft(), MenuTexts.AskMonthPeriod),
-        _ => Stay(MenuStep.SummaryMenu, new SessionDraft(), MenuTexts.Summary)
+        if (text == "1")
+            return AskPeriod(new SessionDraft());
+
+        var method = text switch
+        {
+            "2" => PaymentMethod.Pix,
+            "3" => PaymentMethod.CreditCard,
+            "4" => PaymentMethod.DebitCard,
+            "5" => PaymentMethod.CashWithdrawal,
+            "6" => PaymentMethod.Fixed,
+            "7" => PaymentMethod.Other,
+            _ => (PaymentMethod?)null
+        };
+        if (method is null)
+            return Stay(MenuStep.SummaryMenu, new SessionDraft(), MenuTexts.Summary);
+
+        var draft = new SessionDraft { SummaryMethod = method };
+        var list = SummaryCards(method, cards);
+        if (list.Count == 0)
+            return AskPeriod(draft);
+        return Stay(MenuStep.AwaitingSummaryCard, draft, MenuTexts.SummaryCardList(list));
+    }
+
+    private static MenuTurn OnSummaryCard(string text, SessionDraft draft, IReadOnlyList<KnownCard> cards)
+    {
+        if (draft.SummaryMethod is not (PaymentMethod.CreditCard or PaymentMethod.DebitCard))
+            return OpenMain();
+
+        draft.SummaryCardId = null;
+        draft.SummaryCardName = null;
+        var list = SummaryCards(draft.SummaryMethod, cards);
+        if (list.Count == 0 || text == "1")
+            return AskPeriod(draft);
+        if (int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var index) && index >= 2 && index <= list.Count + 1)
+        {
+            var card = list[index - 2];
+            draft.SummaryCardId = card.Id;
+            draft.SummaryCardName = card.Name;
+            return AskPeriod(draft);
+        }
+
+        return Stay(MenuStep.AwaitingSummaryCard, draft, MenuTexts.SummaryCardList(list));
+    }
+
+    private static IReadOnlyList<KnownCard> SummaryCards(PaymentMethod? method, IReadOnlyList<KnownCard> cards)
+    {
+        var kind = method switch
+        {
+            PaymentMethod.CreditCard => CardKind.Credit,
+            PaymentMethod.DebitCard => CardKind.Debit,
+            _ => (CardKind?)null
+        };
+        if (kind is null)
+            return [];
+        return cards.Where(card => card.Kind == kind).Take(98).ToList();
+    }
+
+    private static MenuTurn AskPeriod(SessionDraft draft) =>
+        Stay(MenuStep.AwaitingSummaryPeriod, draft, MenuTexts.SummaryPeriod);
+
+    private static MenuTurn OnSummaryPeriod(string text, SessionDraft draft, DateOnly today) => text switch
+    {
+        "1" => Period(draft, StartOfMonth(today), EndOfMonth(today)),
+        "2" => Period(draft, StartOfMonth(today.AddMonths(1)), EndOfMonth(today.AddMonths(1))),
+        "3" => Period(draft, new DateOnly(today.Year, 1, 1), new DateOnly(today.Year, 12, 31)),
+        "4" => AskFormat(draft, null, null, "Resumo total"),
+        "5" => Stay(MenuStep.AwaitingDateRange, draft, MenuTexts.AskMonthPeriod),
+        _ => AskPeriod(draft)
     };
 
     private static MenuTurn OnRemove(string text) => text switch
@@ -411,15 +475,15 @@ public static class MenuEngine
         return Stay(MenuStep.AwaitingDeleteChoice, draft, MenuTexts.InvalidDeleteId);
     }
 
-    private static MenuTurn OnDateRange(string text)
+    private static MenuTurn OnDateRange(string text, SessionDraft draft)
     {
         if (!DateRangeParser.TryParseMonths(text, out var from, out var to))
-            return Stay(MenuStep.AwaitingDateRange, new SessionDraft(), MenuTexts.InvalidMonthPeriod);
+            return Stay(MenuStep.AwaitingDateRange, draft, MenuTexts.InvalidMonthPeriod);
 
         var fromLabel = from.ToString("MM/yyyy", CultureInfo.InvariantCulture);
         var toLabel = to.ToString("MM/yyyy", CultureInfo.InvariantCulture);
         var title = fromLabel == toLabel ? $"Resumo de {fromLabel}" : $"Resumo de {fromLabel} a {toLabel}";
-        return AskFormat(new SummaryQuery(from, to, title));
+        return AskFormat(draft, from, to, title);
     }
 
     private static MenuTurn OnSummaryOutput(string text, SessionDraft draft)
@@ -436,28 +500,39 @@ public static class MenuEngine
         };
     }
 
-    private static MenuTurn Period(DateOnly from, DateOnly to)
+    private static MenuTurn Period(SessionDraft filter, DateOnly from, DateOnly to)
     {
         var title = $"Resumo de {MenuTexts.FormatDate(from)} a {MenuTexts.FormatDate(to)}";
-        return AskFormat(new SummaryQuery(from, to, title));
+        return AskFormat(filter, from, to, title);
     }
 
-    private static MenuTurn AskFormat(SummaryQuery query)
+    private static MenuTurn AskFormat(SessionDraft filter, DateOnly? from, DateOnly? to, string title)
     {
         var draft = new SessionDraft
         {
-            SummaryFrom = query.From,
-            SummaryTo = query.To,
-            SummaryTitle = query.Title
+            SummaryFrom = from,
+            SummaryTo = to,
+            SummaryTitle = FilteredTitle(title, filter),
+            SummaryMethod = filter.SummaryMethod,
+            SummaryCardId = filter.SummaryCardId,
+            SummaryCardName = filter.SummaryCardName
         };
         return Stay(MenuStep.AwaitingSummaryOutput, draft, MenuTexts.SummaryOutput);
+    }
+
+    private static string FilteredTitle(string title, SessionDraft filter)
+    {
+        if (filter.SummaryMethod is not PaymentMethod method)
+            return title;
+        var card = string.IsNullOrWhiteSpace(filter.SummaryCardName) ? "" : " " + filter.SummaryCardName.Trim();
+        return $"{title} - {MenuTexts.MethodLabel(method)}{card}";
     }
 
     private static SummaryQuery? QueryFrom(SessionDraft draft)
     {
         if (string.IsNullOrWhiteSpace(draft.SummaryTitle))
             return null;
-        return new SummaryQuery(draft.SummaryFrom, draft.SummaryTo, draft.SummaryTitle);
+        return new SummaryQuery(draft.SummaryFrom, draft.SummaryTo, draft.SummaryTitle, draft.SummaryMethod, draft.SummaryCardId);
     }
 
     private static MenuTurn CardPrompt(SessionDraft draft, IReadOnlyList<KnownCard> cards)

@@ -44,6 +44,9 @@ public static class BulkEntry
         draft.SummaryFrom = null;
         draft.SummaryTo = null;
         draft.SummaryTitle = null;
+        draft.SummaryMethod = null;
+        draft.SummaryCardId = null;
+        draft.SummaryCardName = null;
         var known = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var (key, value) in fields)
         {

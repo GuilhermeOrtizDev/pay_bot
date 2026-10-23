@@ -34,14 +34,15 @@ public sealed record SummaryReport(
     decimal ExpenseTotal,
     IReadOnlyList<MethodTotal> Methods,
     IReadOnlyList<IncomeLine> Incomes,
-    IReadOnlyList<ExpenseLine> Expenses);
+    IReadOnlyList<ExpenseLine> Expenses,
+    bool ExpensesOnly = false);
 
 public static class SummaryAggregator
 {
-    public static SummaryReport Build(string title, IReadOnlyList<SummaryRow> rows)
+    public static SummaryReport Build(string title, IReadOnlyList<SummaryRow> rows, bool expensesOnly = false)
     {
         var incomes = rows
-            .Where(row => row.Direction == Direction.Income)
+            .Where(row => !expensesOnly && row.Direction == Direction.Income)
             .OrderBy(row => row.LocalDate)
             .ThenBy(row => row.Description)
             .ToList();
@@ -81,6 +82,7 @@ public static class SummaryAggregator
                 row.Installments,
                 row.IsFixed,
                 row.Description ?? "",
-                row.Amount)).ToList());
+                row.Amount)).ToList(),
+            expensesOnly);
     }
 }

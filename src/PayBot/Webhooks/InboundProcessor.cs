@@ -164,7 +164,9 @@ public sealed class InboundProcessor(
                     {
                         SummaryFrom = turn.Summary.From,
                         SummaryTo = turn.Summary.To,
-                        SummaryTitle = turn.Summary.Title
+                        SummaryTitle = turn.Summary.Title,
+                        SummaryMethod = turn.Summary.Method,
+                        SummaryCardId = turn.Summary.CardId
                     };
                 }
             }

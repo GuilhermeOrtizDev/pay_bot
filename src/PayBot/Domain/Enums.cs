@@ -69,5 +69,7 @@ public enum MenuStep
     AdminAwaitingGroupJid = 29,
     AdminAwaitingLinkGroup = 30,
     AdminAwaitingLinkTenant = 31,
-    AwaitingInstallmentAmountKind = 32
+    AwaitingInstallmentAmountKind = 32,
+    AwaitingSummaryCard = 33,
+    AwaitingSummaryPeriod = 34
 }
