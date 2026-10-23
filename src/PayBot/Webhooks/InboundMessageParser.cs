@@ -29,6 +29,7 @@ public static class BotEcho
         "Resumo de ",
         "Resumo total",
         "Resumo\n",
+        "Periodo do resumo",
         "Como enviar o resumo",
         "Nao consegui enviar o PDF",
         "Registrar gasto",

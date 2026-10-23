@@ -11,9 +11,11 @@ public static class SummaryFormatter
     {
         var builder = new StringBuilder();
         builder.AppendLine(report.Title);
-        builder.AppendLine($"Entradas: {MenuTexts.Money(report.IncomeTotal)}");
+        if (!report.ExpensesOnly)
+            builder.AppendLine($"Entradas: {MenuTexts.Money(report.IncomeTotal)}");
         builder.AppendLine($"Saidas: {MenuTexts.Money(report.ExpenseTotal)}");
-        builder.AppendLine($"Saldo: {MenuTexts.Money(report.IncomeTotal - report.ExpenseTotal)}");
+        if (!report.ExpensesOnly)
+            builder.AppendLine($"Saldo: {MenuTexts.Money(report.IncomeTotal - report.ExpenseTotal)}");
 
         if (report.Methods.Count > 0)
         {

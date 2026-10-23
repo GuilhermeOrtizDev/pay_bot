@@ -12,6 +12,10 @@ public sealed class SummaryService(PayBotDbContext db)
         var source = db.Transactions.AsNoTracking().Where(entry => entry.TenantId == tenantId);
         if (query.From is DateOnly from && query.To is DateOnly to)
             source = source.Where(entry => entry.LocalDate >= from && entry.LocalDate <= to);
+        if (query.Method is PaymentMethod method)
+            source = source.Where(entry => entry.Direction == Direction.Expense && entry.PaymentMethod == method);
+        if (query.CardId is Guid cardId)
+            source = source.Where(entry => entry.CardId == cardId);
 
         var rows = await source
             .Select(entry => new SummaryRow(
@@ -26,7 +30,7 @@ public sealed class SummaryService(PayBotDbContext db)
                 entry.CreatedAt))
             .ToListAsync(cancellationToken);
 
-        return SummaryAggregator.Build(query.Title, rows);
+        return SummaryAggregator.Build(query.Title, rows, query.Method is not null);
     }
 
     public async Task<decimal> MonthBalanceAsync(Guid tenantId, DateOnly date, CancellationToken cancellationToken)

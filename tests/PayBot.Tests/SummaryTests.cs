@@ -98,6 +98,69 @@ public class SummaryTests
         Assert.Equal(10, report.IncomeTotal - report.ExpenseTotal);
     }
 
+    [Fact]
+    public async Task Method_filter_shows_only_expenses_of_that_method()
+    {
+        await using var db = await TestDb.CreateAsync();
+        var card = Card(CardKind.Credit, "Nubank");
+        db.Cards.Add(card);
+        db.Transactions.Add(Income(new DateOnly(2026, 10, 2), 3000, "salario"));
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 3), 50, PaymentMethod.Pix, description: "padaria"));
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 5), 400, PaymentMethod.CreditCard, card, 10));
+        await db.SaveChangesAsync();
+
+        var report = await new SummaryService(db).BuildAsync(
+            TestDb.Tenant,
+            new SummaryQuery(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31), "Resumo de 01/10/2026 a 31/10/2026 - Pix", PaymentMethod.Pix),
+            CancellationToken.None);
+
+        Assert.True(report.ExpensesOnly);
+        Assert.Equal(0, report.IncomeTotal);
+        Assert.Empty(report.Incomes);
+        Assert.Equal(50, report.ExpenseTotal);
+        Assert.Equal(
+            """
+            Resumo de 01/10/2026 a 31/10/2026 - Pix
+            Saidas: R$ 50,00
+
+            Saidas
+            - Pix: R$ 50,00
+            """.Replace("\r\n", "\n"),
+            SummaryFormatter.Format(report).Replace("\r\n", "\n"));
+
+        var pdf = System.Text.Encoding.ASCII.GetString(SummaryPdf.Render(report));
+        Assert.DoesNotContain("Entradas", pdf);
+        Assert.DoesNotContain("Saldo", pdf);
+    }
+
+    [Fact]
+    public async Task Card_filter_keeps_only_that_card()
+    {
+        await using var db = await TestDb.CreateAsync();
+        var nubank = Card(CardKind.Credit, "Nubank");
+        var inter = Card(CardKind.Credit, "Inter");
+        db.Cards.AddRange(nubank, inter);
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 5), 400, PaymentMethod.CreditCard, nubank));
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 6), 70, PaymentMethod.CreditCard, inter));
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 7), 20, PaymentMethod.Pix));
+        await db.SaveChangesAsync();
+
+        var service = new SummaryService(db);
+        var one = await service.BuildAsync(
+            TestDb.Tenant,
+            new SummaryQuery(null, null, "Resumo total - Cartao credito Nubank", PaymentMethod.CreditCard, nubank.Id),
+            CancellationToken.None);
+        var every = await service.BuildAsync(
+            TestDb.Tenant,
+            new SummaryQuery(null, null, "Resumo total - Cartao credito", PaymentMethod.CreditCard),
+            CancellationToken.None);
+
+        Assert.Equal(400, one.ExpenseTotal);
+        Assert.Equal("Nubank", Assert.Single(Assert.Single(one.Methods).Cards).Name);
+        Assert.Equal(470, every.ExpenseTotal);
+        Assert.Equal(2, Assert.Single(every.Methods).Cards.Count);
+    }
+
     private static async Task<string> FormatAsync(PayBotDbContext db, DateOnly from, DateOnly to, string title)
     {
         var report = await new SummaryService(db).BuildAsync(TestDb.Tenant, new SummaryQuery(from, to, title), CancellationToken.None);

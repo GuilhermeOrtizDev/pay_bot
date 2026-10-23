@@ -21,8 +21,9 @@ public class MenuEngineTests
 
         var summary = Act("3", MenuStep.Main);
         Assert.Equal(MenuStep.SummaryMenu, summary.NextStep);
-        Assert.Contains("2 - Resumo do proximo mes", summary.Reply);
-        Assert.Contains("5 - Filtrar data", summary.Reply);
+        Assert.Contains("1 - Tudo", summary.Reply);
+        Assert.Contains("3 - Cartao credito", summary.Reply);
+        Assert.Contains("7 - Outros", summary.Reply);
         Assert.DoesNotContain("5 - Remover", summary.Reply);
 
         var remove = Act("4", MenuStep.Main);
@@ -316,7 +317,13 @@ public class MenuEngineTests
     [Fact]
     public void Summary_options_cover_month_year_total_and_custom_range()
     {
-        var month = Act("1", MenuStep.SummaryMenu);
+        var all = Act("1", MenuStep.SummaryMenu);
+        Assert.Equal(MenuStep.AwaitingSummaryPeriod, all.NextStep);
+        Assert.Contains("2 - Resumo do proximo mes", all.Reply);
+        Assert.Contains("5 - Filtrar data", all.Reply);
+        Assert.Null(all.Draft.SummaryMethod);
+
+        var month = Act("1", MenuStep.AwaitingSummaryPeriod);
         Assert.Equal(MenuStep.AwaitingSummaryOutput, month.NextStep);
         Assert.Contains("1 - Gerar em PDF", month.Reply);
         Assert.Contains("2 - Gerar em texto", month.Reply);
@@ -332,21 +339,23 @@ public class MenuEngineTests
         var asPdf = Act("1", month.NextStep, month.Draft);
         Assert.True(asPdf.AsPdf);
         Assert.Equal(month.Draft.SummaryTitle, asPdf.Summary!.Title);
+        Assert.Null(asPdf.Summary.Method);
+        Assert.Null(asPdf.Summary.CardId);
 
-        var nextMonth = Act("2", MenuStep.SummaryMenu);
+        var nextMonth = Act("2", MenuStep.AwaitingSummaryPeriod);
         Assert.Equal(new DateOnly(2026, 11, 1), nextMonth.Draft.SummaryFrom);
         Assert.Equal(new DateOnly(2026, 11, 30), nextMonth.Draft.SummaryTo);
 
-        var year = Act("3", MenuStep.SummaryMenu);
+        var year = Act("3", MenuStep.AwaitingSummaryPeriod);
         Assert.Equal(new DateOnly(2026, 1, 1), year.Draft.SummaryFrom);
         Assert.Equal(new DateOnly(2026, 12, 31), year.Draft.SummaryTo);
 
-        var total = Act("4", MenuStep.SummaryMenu);
+        var total = Act("4", MenuStep.AwaitingSummaryPeriod);
         Assert.Null(total.Draft.SummaryFrom);
         Assert.Null(total.Draft.SummaryTo);
         Assert.Equal("Resumo total", total.Draft.SummaryTitle);
 
-        var ask = Act("5", MenuStep.SummaryMenu);
+        var ask = Act("5", MenuStep.AwaitingSummaryPeriod);
         Assert.Equal(MenuStep.AwaitingDateRange, ask.NextStep);
 
         var single = Act("01/2025", ask.NextStep);
@@ -366,6 +375,75 @@ public class MenuEngineTests
         Assert.Null(invalid.Summary);
         Assert.Contains("Mes invalido", invalid.Reply);
 
+    }
+
+    [Fact]
+    public void Summary_filter_by_method_carries_to_the_query()
+    {
+        var pix = Act("2", MenuStep.SummaryMenu, cards: Cards());
+        Assert.Equal(MenuStep.AwaitingSummaryPeriod, pix.NextStep);
+        Assert.Equal(PaymentMethod.Pix, pix.Draft.SummaryMethod);
+
+        var total = Act("4", pix.NextStep, pix.Draft);
+        Assert.Equal("Resumo total - Pix", total.Draft.SummaryTitle);
+
+        var asText = Act("2", total.NextStep, total.Draft);
+        Assert.Equal(PaymentMethod.Pix, asText.Summary!.Method);
+        Assert.Null(asText.Summary.CardId);
+        Assert.Equal("Resumo total - Pix", asText.Summary.Title);
+
+        var ask = Act("5", pix.NextStep, pix.Draft);
+        var range = Act("01/2025", ask.NextStep, ask.Draft);
+        Assert.Equal(PaymentMethod.Pix, range.Draft.SummaryMethod);
+        Assert.Equal("Resumo de 01/2025 - Pix", range.Draft.SummaryTitle);
+
+        var invalid = Act("9", MenuStep.SummaryMenu);
+        Assert.Equal(MenuStep.SummaryMenu, invalid.NextStep);
+        Assert.Contains("1 - Tudo", invalid.Reply);
+    }
+
+    [Fact]
+    public void Summary_card_filter_lists_cards_of_the_kind()
+    {
+        var credit = Act("3", MenuStep.SummaryMenu, cards: Cards());
+        Assert.Equal(MenuStep.AwaitingSummaryCard, credit.NextStep);
+        Assert.Equal(PaymentMethod.CreditCard, credit.Draft.SummaryMethod);
+        Assert.Contains("1 - Todos os cartoes", credit.Reply);
+        Assert.Contains("2 - Nubank", credit.Reply);
+        Assert.DoesNotContain("Inter", credit.Reply);
+        Assert.DoesNotContain("99 -", credit.Reply);
+
+        var everyCard = Act("1", credit.NextStep, credit.Draft, Cards());
+        Assert.Equal(MenuStep.AwaitingSummaryPeriod, everyCard.NextStep);
+        Assert.Null(everyCard.Draft.SummaryCardId);
+        var everyMonth = Act("1", everyCard.NextStep, everyCard.Draft);
+        Assert.Equal("Resumo de 01/10/2026 a 31/10/2026 - Cartao credito", everyMonth.Draft.SummaryTitle);
+
+        var nubank = Act("2", credit.NextStep, credit.Draft, Cards());
+        Assert.Equal(MenuStep.AwaitingSummaryPeriod, nubank.NextStep);
+        Assert.Equal(NubankId, nubank.Draft.SummaryCardId);
+        var month = Act("1", nubank.NextStep, nubank.Draft);
+        Assert.Equal("Resumo de 01/10/2026 a 31/10/2026 - Cartao credito Nubank", month.Draft.SummaryTitle);
+        var asPdf = Act("1", month.NextStep, month.Draft);
+        Assert.Equal(PaymentMethod.CreditCard, asPdf.Summary!.Method);
+        Assert.Equal(NubankId, asPdf.Summary.CardId);
+
+        var invalid = Act("3", credit.NextStep, credit.Draft, Cards());
+        Assert.Equal(MenuStep.AwaitingSummaryCard, invalid.NextStep);
+        Assert.Contains("2 - Nubank", invalid.Reply);
+
+        var debit = Act("4", MenuStep.SummaryMenu, cards: Cards());
+        Assert.Contains("2 - Inter", debit.Reply);
+        Assert.DoesNotContain("Nubank", debit.Reply);
+    }
+
+    [Fact]
+    public void Summary_card_filter_without_cards_goes_to_the_period()
+    {
+        var credit = Act("3", MenuStep.SummaryMenu);
+        Assert.Equal(MenuStep.AwaitingSummaryPeriod, credit.NextStep);
+        Assert.Equal(PaymentMethod.CreditCard, credit.Draft.SummaryMethod);
+        Assert.Null(credit.Draft.SummaryCardId);
     }
 
     [Fact]

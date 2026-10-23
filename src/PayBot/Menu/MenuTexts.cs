@@ -99,6 +99,18 @@ public static class MenuTexts
     public const string Summary = """
         Resumo
         0 - Voltar Menu Inicial
+        1 - Tudo
+        2 - Pix
+        3 - Cartao credito
+        4 - Cartao debito
+        5 - Retirada de caixa
+        6 - Despesa Fixa
+        7 - Outros
+        """;
+
+    public const string SummaryPeriod = """
+        Periodo do resumo
+        0 - Voltar Menu Inicial
         1 - Resumo do mes
         2 - Resumo do proximo mes
         3 - Resumo do ano
@@ -236,6 +248,17 @@ public static class MenuTexts
         for (var i = 0; i < cards.Count; i++)
             builder.AppendLine($"{i + 1} - {cards[i].Name}");
         builder.Append("99 - Registrar novo cartao");
+        return builder.ToString();
+    }
+
+    public static string SummaryCardList(IReadOnlyList<KnownCard> cards)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("Escolha o cartao");
+        builder.AppendLine("0 - Voltar Menu Inicial");
+        builder.Append("1 - Todos os cartoes");
+        for (var i = 0; i < cards.Count; i++)
+            builder.Append($"\n{i + 2} - {cards[i].Name}");
         return builder.ToString();
     }
 
