@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Text;
 using PayBot.Domain;
+using PayBot.Time;
 
 namespace PayBot.Menu;
 
@@ -22,8 +24,12 @@ public static class DeleteListFormatter
         return builder.ToString().TrimEnd();
     }
 
-    public static string Line(LedgerEntry entry) =>
-        $"{Name(entry)} - {MenuTexts.Money(entry.Amount)} - {MenuTexts.FormatDate(entry.LocalDate)}";
+    public static string Line(LedgerEntry entry)
+    {
+        var reference = entry.LocalDate.ToString("MM/yyyy", CultureInfo.InvariantCulture);
+        var generated = MenuTexts.FormatDate(SaoPauloClock.LocalDate(entry.CreatedAt));
+        return $"{Name(entry)} - {MenuTexts.Money(entry.Amount)} - {reference} gerado {generated}";
+    }
 
     public static string Name(LedgerEntry entry)
     {

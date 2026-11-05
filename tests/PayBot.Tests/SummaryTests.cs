@@ -389,6 +389,22 @@ public class SummaryTests
         Assert.Equal(["salario"], incomes);
         Assert.Equal(["gasto"], expenses);
     }
+
+    [Fact]
+    public void Delete_list_shows_reference_month_and_generated_day()
+    {
+        var created = SaoPauloClock.AtNoon(new DateOnly(2026, 10, 5));
+        var entry = Expense(new DateOnly(2026, 11, 1), 50, PaymentMethod.Pix, createdAt: created, description: "padaria");
+
+        Assert.Equal("padaria - R$ 50,00 - 11/2026 gerado 05/10/2026", DeleteListFormatter.Line(entry));
+        Assert.Equal(
+            """
+            Selecione o id para remover
+            0 - Voltar Menu Inicial
+            1 - padaria - R$ 50,00 - 11/2026 gerado 05/10/2026
+            """.Replace("\r\n", "\n"),
+            DeleteListFormatter.Format([entry]).Replace("\r\n", "\n"));
+    }
 }
 
 file static class TestDb
