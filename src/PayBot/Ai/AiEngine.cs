@@ -10,7 +10,9 @@ public static class AiEngine
         step is MenuStep.AiMode
             or MenuStep.AiAwaitingConfirm
             or MenuStep.AiAwaitingDeleteChoice
-            or MenuStep.AiAwaitingDeleteConfirm;
+            or MenuStep.AiAwaitingDeleteConfirm
+            or MenuStep.AiAwaitingFixedEndMonth;
+
 
     public static MenuTurn? Direct(
         string? rawText,
@@ -43,6 +45,14 @@ public static class AiEngine
                 if (index < 1 || index > ids.Count)
                     return Stay(step, current, MenuTexts.InvalidDeleteId + "\n" + MenuTexts.AiDeleteChoice);
                 var chosen = current.Clone();
+                if (current.Method == PaymentMethod.Fixed)
+                {
+                    chosen.Method = PaymentMethod.Fixed;
+                    chosen.FixedDeleteId = ids[index - 1];
+                    chosen.DeleteIds = ids;
+                    return Stay(MenuStep.AiAwaitingFixedEndMonth, chosen, MenuTexts.AskFixedEndMonth);
+                }
+
                 chosen.DeleteIds = [ids[index - 1]];
                 return Stay(MenuStep.AiAwaitingDeleteConfirm, chosen, MenuTexts.AiDeleteConfirm(index));
 
@@ -52,6 +62,22 @@ public static class AiEngine
                 if (IsNo(text))
                     return Cancel();
                 return null;
+
+            case MenuStep.AiAwaitingFixedEndMonth:
+                if (IsNo(text))
+                    return Cancel();
+                if (current.FixedDeleteId is not Guid fixedId)
+                    return Cancel();
+                if (!DateRangeParser.TryParseMonth((rawText ?? text).Trim(), out var endMonth))
+                    return Stay(step, current, MenuTexts.InvalidFixedEndMonth);
+                return new MenuTurn(
+                    "",
+                    MenuStep.AiMode,
+                    new SessionDraft(),
+                    null,
+                    null,
+                    null,
+                    CloseFixed: new CloseFixedExpense(fixedId, endMonth));
 
             default:
                 return null;
@@ -160,10 +186,30 @@ public static class AiEngine
 
     private static MenuTurn Remove(AiIntent intent)
     {
+        if (IsFixedRemove(intent))
+        {
+            return new MenuTurn(
+                "",
+                MenuStep.AiAwaitingDeleteChoice,
+                new SessionDraft { Method = PaymentMethod.Fixed },
+                null,
+                null,
+                null,
+                FixedDeleteList: new FixedDeleteListRequest());
+        }
+
         var request = Range(intent) is { } range
             ? new DeleteListRequest(range.From, range.To, 30)
             : new DeleteListRequest(null, null, 10);
         return new MenuTurn("", MenuStep.AiAwaitingDeleteChoice, new SessionDraft(), null, null, null, request);
+    }
+
+    private static bool IsFixedRemove(AiIntent intent)
+    {
+        if (!intent.Fields.TryGetValue("tipo", out var tipo))
+            return false;
+        var folded = BulkEntry.Fold(tipo);
+        return folded is "despesa fixa" or "fixa" or "fixo";
     }
 
     private static (DateOnly From, DateOnly To)? Range(AiIntent intent)
@@ -183,6 +229,7 @@ public static class AiEngine
         {
             MenuStep.AiAwaitingConfirm or MenuStep.AiAwaitingDeleteConfirm => text + "\nResponda sim ou nao.",
             MenuStep.AiAwaitingDeleteChoice => text + "\n" + MenuTexts.AiDeleteChoice,
+            MenuStep.AiAwaitingFixedEndMonth => text + "\n" + MenuTexts.AskFixedEndMonth,
             _ => text
         };
     }

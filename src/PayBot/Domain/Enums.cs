@@ -72,5 +72,9 @@ public enum MenuStep
     AwaitingInstallmentAmountKind = 32,
     AwaitingSummaryCard = 33,
     AwaitingSummaryPeriod = 34,
-    AwaitingDeleteScope = 35
+    AwaitingDeleteScope = 35,
+    AwaitingFixedDeleteChoice = 36,
+    AwaitingFixedEndMonth = 37,
+    AiAwaitingFixedEndMonth = 38
 }
+

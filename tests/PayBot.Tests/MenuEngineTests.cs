@@ -457,6 +457,30 @@ public class MenuEngineTests
     }
 
     [Fact]
+    public void Remove_fixed_expense_asks_for_end_month()
+    {
+        var list = Act("3", MenuStep.RemoveMenu);
+        Assert.Equal(MenuStep.AwaitingFixedDeleteChoice, list.NextStep);
+        Assert.NotNull(list.FixedDeleteList);
+
+        var id = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        var chosen = Act("1", MenuStep.AwaitingFixedDeleteChoice, new SessionDraft { DeleteIds = [id] });
+        Assert.Equal(MenuStep.AwaitingFixedEndMonth, chosen.NextStep);
+        Assert.Equal(id, chosen.Draft.FixedDeleteId);
+        Assert.Contains("Ate qual mes", chosen.Reply);
+
+        var closed = Act("10/2026", chosen.NextStep, chosen.Draft);
+        Assert.Equal(MenuStep.RemoveMenu, closed.NextStep);
+        Assert.Equal(id, closed.CloseFixed!.Id);
+        Assert.Equal(new DateOnly(2026, 10, 1), closed.CloseFixed.EndMonth);
+
+        var invalid = Act("2026", MenuStep.AwaitingFixedEndMonth, new SessionDraft { FixedDeleteId = id });
+        Assert.Equal(MenuStep.AwaitingFixedEndMonth, invalid.NextStep);
+        Assert.Null(invalid.CloseFixed);
+        Assert.Contains("Mes final invalido", invalid.Reply);
+    }
+
+    [Fact]
     public void Remove_lists_by_recency_or_date_and_deletes_the_selected_id()
     {
         var income = Act("1", MenuStep.RemoveMenu);

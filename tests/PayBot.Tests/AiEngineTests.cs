@@ -18,7 +18,14 @@ public class AiEngineTests
     [Fact]
     public void Secret_admin_command_is_not_available_in_ai_mode()
     {
-        foreach (var step in new[] { MenuStep.AiMode, MenuStep.AiAwaitingConfirm, MenuStep.AiAwaitingDeleteChoice, MenuStep.AiAwaitingDeleteConfirm })
+        foreach (var step in new[]
+                 {
+                     MenuStep.AiMode,
+                     MenuStep.AiAwaitingConfirm,
+                     MenuStep.AiAwaitingDeleteChoice,
+                     MenuStep.AiAwaitingDeleteConfirm,
+                     MenuStep.AiAwaitingFixedEndMonth
+                 })
         {
             var turn = AiEngine.Direct("*000", step, new SessionDraft(), []);
             Assert.NotNull(turn);
@@ -31,8 +38,15 @@ public class AiEngineTests
     [Fact]
     public void Desativar_ia_leaves_ai_mode_from_any_ai_step()
     {
-        foreach (var step in new[] { MenuStep.AiMode, MenuStep.AiAwaitingConfirm, MenuStep.AiAwaitingDeleteChoice })
+        foreach (var step in new[]
+                 {
+                     MenuStep.AiMode,
+                     MenuStep.AiAwaitingConfirm,
+                     MenuStep.AiAwaitingDeleteChoice,
+                     MenuStep.AiAwaitingFixedEndMonth
+                 })
         {
+
             var turn = AiEngine.Direct("Desativar IA.", step, new SessionDraft(), []);
             Assert.NotNull(turn);
             Assert.Equal(MenuStep.Main, turn.NextStep);
@@ -201,6 +215,33 @@ public class AiEngineTests
         var kept = AiEngine.Direct("nao", chosen.NextStep, chosen.Draft, []);
         Assert.NotNull(kept);
         Assert.Null(kept.DeleteId);
+    }
+
+    [Fact]
+    public void Remove_fixed_expense_asks_for_end_month()
+    {
+        var list = Interpret(
+            new AiIntent(AiAction.Remove, Fields(("tipo", "despesa fixa"))),
+            MenuStep.AiMode,
+            new SessionDraft());
+        Assert.Equal(MenuStep.AiAwaitingDeleteChoice, list.NextStep);
+        Assert.NotNull(list.FixedDeleteList);
+        Assert.Null(list.DeleteList);
+        Assert.Equal(PaymentMethod.Fixed, list.Draft.Method);
+
+        var id = Guid.NewGuid();
+        var shown = new SessionDraft { Method = PaymentMethod.Fixed, DeleteIds = [id] };
+        var chosen = AiEngine.Direct("1", MenuStep.AiAwaitingDeleteChoice, shown, []);
+        Assert.NotNull(chosen);
+        Assert.Equal(MenuStep.AiAwaitingFixedEndMonth, chosen.NextStep);
+        Assert.Equal(id, chosen.Draft.FixedDeleteId);
+        Assert.Contains("Ate qual mes", chosen.Reply);
+
+        var closed = AiEngine.Direct("10/2026", chosen.NextStep, chosen.Draft, []);
+        Assert.NotNull(closed);
+        Assert.Equal(MenuStep.AiMode, closed.NextStep);
+        Assert.Equal(id, closed.CloseFixed!.Id);
+        Assert.Equal(new DateOnly(2026, 10, 1), closed.CloseFixed.EndMonth);
     }
 
     [Fact]

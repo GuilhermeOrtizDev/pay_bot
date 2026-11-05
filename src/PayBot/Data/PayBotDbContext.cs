@@ -8,9 +8,11 @@ public sealed class PayBotDbContext(DbContextOptions<PayBotDbContext> options) :
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<WhatsAppGroup> Groups => Set<WhatsAppGroup>();
     public DbSet<LedgerEntry> Transactions => Set<LedgerEntry>();
+    public DbSet<FixedExpense> FixedExpenses => Set<FixedExpense>();
     public DbSet<Card> Cards => Set<Card>();
     public DbSet<ConversationSession> Sessions => Set<ConversationSession>();
     public DbSet<ProcessedMessage> ProcessedMessages => Set<ProcessedMessage>();
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -52,6 +54,22 @@ public sealed class PayBotDbContext(DbContextOptions<PayBotDbContext> options) :
                 .HasForeignKey(x => x.CardId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
+
+        modelBuilder.Entity<FixedExpense>(entry =>
+        {
+            entry.ToTable("fixed_expenses");
+            entry.HasKey(x => x.Id);
+            entry.Property(x => x.Amount).HasPrecision(14, 2);
+            entry.Property(x => x.Description).HasMaxLength(200).IsRequired();
+            entry.Property(x => x.WhatsAppMessageId).HasMaxLength(128).IsRequired();
+            entry.HasIndex(x => x.WhatsAppMessageId).IsUnique();
+            entry.HasIndex(x => new { x.TenantId, x.StartMonth });
+            entry.HasOne<Tenant>()
+                .WithMany()
+                .HasForeignKey(x => x.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
 
         modelBuilder.Entity<Card>(entry =>
         {

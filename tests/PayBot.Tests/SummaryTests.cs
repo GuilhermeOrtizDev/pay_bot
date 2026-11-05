@@ -69,7 +69,7 @@ public class SummaryTests
     {
         await using var db = await TestDb.CreateAsync();
         db.Transactions.Add(Income(new DateOnly(2024, 1, 1), 100, "antiga"));
-        db.Transactions.Add(Expense(new DateOnly(2026, 8, 1), 40, PaymentMethod.Fixed));
+        db.FixedExpenses.Add(Fixed(new DateOnly(2026, 8, 1), 40, "aluguel", new DateOnly(2026, 8, 1)));
         await db.SaveChangesAsync();
 
         var report = await new SummaryService(db).BuildAsync(
@@ -84,6 +84,74 @@ public class SummaryTests
         Assert.Equal(0, report.OpeningBalance);
         Assert.Equal(60, report.Balance);
         Assert.DoesNotContain("Saldo anterior", SummaryFormatter.Format(report));
+    }
+
+    [Fact]
+    public async Task Fixed_expense_expands_across_months_until_end()
+    {
+        await using var db = await TestDb.CreateAsync();
+        db.FixedExpenses.Add(Fixed(new DateOnly(2026, 9, 1), 100, "aluguel"));
+        await db.SaveChangesAsync();
+
+        var service = new SummaryService(db);
+        var open = await service.BuildAsync(
+            TestDb.Tenant,
+            new SummaryQuery(new DateOnly(2026, 9, 1), new DateOnly(2026, 11, 30), "Resumo"),
+            CancellationToken.None);
+        Assert.Equal(300, open.ExpenseTotal);
+        Assert.Equal(3, open.Expenses.Count);
+
+        db.FixedExpenses.First().EndMonth = new DateOnly(2026, 10, 1);
+        await db.SaveChangesAsync();
+
+        var closed = await service.BuildAsync(
+            TestDb.Tenant,
+            new SummaryQuery(new DateOnly(2026, 9, 1), new DateOnly(2026, 11, 30), "Resumo"),
+            CancellationToken.None);
+        Assert.Equal(200, closed.ExpenseTotal);
+        Assert.Equal(2, closed.Expenses.Count);
+        Assert.DoesNotContain(closed.Expenses, line => line.Date.Month == 11);
+    }
+
+    [Fact]
+    public async Task Month_balance_includes_open_fixed_expense()
+    {
+        await using var db = await TestDb.CreateAsync();
+        db.Transactions.Add(Income(new DateOnly(2026, 10, 2), 1000, "salario"));
+        db.FixedExpenses.Add(Fixed(new DateOnly(2026, 9, 1), 150, "net"));
+        await db.SaveChangesAsync();
+
+        var service = new SummaryService(db);
+        Assert.Equal(700m, await service.MonthBalanceAsync(TestDb.Tenant, new DateOnly(2026, 10, 1), CancellationToken.None));
+
+        var november = await service.BuildAsync(
+            TestDb.Tenant,
+            new SummaryQuery(new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 30), "Resumo"),
+            CancellationToken.None);
+        Assert.Equal(700, november.OpeningBalance);
+        Assert.Equal(550, november.Balance);
+    }
+
+    [Fact]
+    public async Task Fixed_method_filter_reads_only_fixed_expenses()
+    {
+        await using var db = await TestDb.CreateAsync();
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 1), 20, PaymentMethod.Pix));
+        db.FixedExpenses.Add(Fixed(new DateOnly(2026, 10, 1), 80, "condo"));
+        await db.SaveChangesAsync();
+
+        var report = await new SummaryService(db).BuildAsync(
+            TestDb.Tenant,
+            new SummaryQuery(
+                new DateOnly(2026, 10, 1),
+                new DateOnly(2026, 10, 31),
+                "Resumo - Despesa Fixa",
+                PaymentMethod.Fixed),
+            CancellationToken.None);
+
+        Assert.Equal(80, report.ExpenseTotal);
+        Assert.Single(report.Expenses);
+        Assert.Equal(PaymentMethod.Fixed, report.Expenses[0].Method);
     }
 
     [Fact]
@@ -228,6 +296,23 @@ public class SummaryTests
         Installments = installments,
         CardId = card?.Id,
         Card = card,
+        WhatsAppMessageId = Guid.NewGuid().ToString("N")
+    };
+
+    private static FixedExpense Fixed(
+        DateOnly startMonth,
+        decimal amount,
+        string description,
+        DateOnly? endMonth = null,
+        Guid? tenant = null) => new()
+    {
+        Id = Guid.NewGuid(),
+        TenantId = tenant ?? TestDb.Tenant,
+        CreatedAt = SaoPauloClock.AtNoon(startMonth),
+        Amount = amount,
+        Description = description,
+        StartMonth = startMonth,
+        EndMonth = endMonth,
         WhatsAppMessageId = Guid.NewGuid().ToString("N")
     };
 
@@ -447,6 +532,16 @@ public class SummaryTests
             1 - padaria - R$ 50,00 - 11/2026 gerado 05/10/2026
             """.Replace("\r\n", "\n"),
             DeleteListFormatter.Format([entry]).Replace("\r\n", "\n"));
+    }
+
+    [Fact]
+    public void Fixed_delete_list_shows_start_and_optional_end()
+    {
+        var open = Fixed(new DateOnly(2026, 9, 1), 1500, "aluguel");
+        Assert.Equal("aluguel - R$ 1.500,00 - desde 09/2026", DeleteListFormatter.FixedLine(open));
+
+        var closed = Fixed(new DateOnly(2026, 9, 1), 1500, "aluguel", new DateOnly(2026, 11, 1));
+        Assert.Equal("aluguel - R$ 1.500,00 - desde 09/2026 ate 11/2026", DeleteListFormatter.FixedLine(closed));
     }
 }
 

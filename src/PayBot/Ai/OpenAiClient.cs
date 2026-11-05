@@ -57,9 +57,10 @@ public sealed class OpenAiClient(
         - remover: apagar, excluir ou desfazer um registro ja salvo.
         - outro: nada disso, mensagem ambigua, ou mais de um lancamento na mesma mensagem. Em resposta, escreva uma frase curta pedindo o que falta ou pedindo um lancamento por vez.
 
-        campos (so para gasto e entrada; nos outros casos, todos null):
+        campos (gasto, entrada e remover despesa fixa; nos outros casos, todos null):
         - Preencha apenas o que a mensagem ou o rascunho informam. Nunca invente valor, cartao, parcelas ou descricao. Use null para o que nao souber.
-        - tipo (so gasto): exatamente um de: pix, cartao credito, cartao debito, retirada, despesa fixa, outros. "credito" = cartao credito; "debito" = cartao debito; saque ou dinheiro retirado do caixa = retirada; conta mensal sem cartao (aluguel, condominio, internet) = despesa fixa; dinheiro, boleto ou outra forma = outros. Em entrada, tipo e null.
+        - tipo (gasto ou remover): exatamente um de: pix, cartao credito, cartao debito, retirada, despesa fixa, outros. "credito" = cartao credito; "debito" = cartao debito; saque ou dinheiro retirado do caixa = retirada; conta mensal sem cartao (aluguel, condominio, internet) = despesa fixa; dinheiro, boleto ou outra forma = outros. Em entrada, tipo e null. Em remover, use tipo despesa fixa so quando o usuario pedir para encerrar/apagar uma despesa fixa; nos outros removimentos, tipo null.
+
         - cobranca (so cartao credito ou cartao debito): exatamente um de: parcelas, a vista, fixo. Assinatura ou cobranca mensal recorrente no cartao = fixo. Cartao debito nunca e parcelas. Em outros tipos, null.
         - parcelas: numero inteiro, so quando cobranca = parcelas.
         - valor: o valor que o usuario disse, no formato 1234,56. Nao converta valor de parcela em total nem o contrario.

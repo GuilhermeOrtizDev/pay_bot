@@ -141,6 +141,8 @@ public sealed class InboundProcessor(
         var nextStep = turn.NextStep;
         var draft = turn.Draft;
         var previousStep = session.Step;
+        var closedFixed = false;
+
         if (turn.Summary is not null)
         {
             var report = await summaries.BuildAsync(tenant, turn.Summary, cancellationToken);
@@ -194,6 +196,24 @@ public sealed class InboundProcessor(
             }
         }
 
+        if (turn.FixedDeleteList is not null)
+        {
+            var entries = await LoadFixedDeleteCandidatesAsync(tenant, turn.FixedDeleteList, cancellationToken);
+            if (entries.Count == 0)
+            {
+                reply = aiTurn ? MenuTexts.NoRecords : MenuTexts.NoRecords + "\n\n" + MenuTexts.Remove;
+                nextStep = aiTurn ? MenuStep.AiMode : MenuStep.RemoveMenu;
+                draft = new SessionDraft();
+            }
+            else
+            {
+                reply = aiTurn
+                    ? DeleteListFormatter.FormatFixedChoices(entries) + "\n\n" + MenuTexts.AiDeleteChoice
+                    : DeleteListFormatter.FormatFixed(entries);
+                draft.DeleteIds = entries.Select(entry => entry.Id).ToList();
+            }
+        }
+
         if (turn.DeleteId is Guid deleteId)
         {
             var entry = await db.Transactions
@@ -206,6 +226,27 @@ public sealed class InboundProcessor(
             {
                 reply = $"Registro removido: {DeleteListFormatter.Line(entry)}{menu}";
                 db.Transactions.Remove(entry);
+            }
+        }
+
+        if (turn.CloseFixed is { } closeFixed)
+        {
+            var entry = await db.FixedExpenses
+                .FirstOrDefaultAsync(item => item.Id == closeFixed.Id && item.TenantId == tenant, cancellationToken);
+            var menu = aiTurn ? "" : "\n\n" + MenuTexts.Remove;
+            if (entry is null)
+                reply = MenuTexts.RecordNotFound + menu;
+            else if (closeFixed.EndMonth < FixedExpenseSchedule.FirstOfMonth(entry.StartMonth))
+            {
+                reply = MenuTexts.InvalidFixedEndMonth;
+                nextStep = aiTurn ? MenuStep.AiAwaitingFixedEndMonth : MenuStep.AwaitingFixedEndMonth;
+                draft = new SessionDraft { FixedDeleteId = entry.Id, DeleteIds = draft.DeleteIds };
+            }
+            else
+            {
+                entry.EndMonth = FixedExpenseSchedule.FirstOfMonth(closeFixed.EndMonth);
+                reply = $"Despesa fixa encerrada: {DeleteListFormatter.FixedLine(entry)}{menu}";
+                closedFixed = true;
             }
         }
 
@@ -236,7 +277,7 @@ public sealed class InboundProcessor(
             return;
         }
 
-        if (turn.Expense is not null || turn.Income is not null)
+        if (turn.Expense is not null || turn.Income is not null || closedFixed)
             reply = await AppendMonthBalanceAsync(tenant, reply, turn, now, cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(reply))
@@ -341,6 +382,7 @@ public sealed class InboundProcessor(
     private static string FailureReply(MenuStep step) => step switch
     {
         MenuStep.AwaitingChargeMonth or MenuStep.AwaitingIncomeMonth => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskChargeMonth,
+        MenuStep.AwaitingFixedEndMonth or MenuStep.AiAwaitingFixedEndMonth => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskFixedEndMonth,
         MenuStep.AwaitingDateRange => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskPeriod,
         MenuStep.AwaitingDeleteDateRange => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskPeriod,
         MenuStep.AwaitingAmount or MenuStep.AwaitingIncomeAmount => MenuTexts.SaveFailed + "\n\n" + MenuTexts.AskAmount,
@@ -355,9 +397,16 @@ public sealed class InboundProcessor(
 
     private async Task AddExpenseAsync(Guid tenantId, PendingExpense expense, string messageId, DateTimeOffset now, CancellationToken cancellationToken)
     {
+        if (expense.Method == PaymentMethod.Fixed)
+        {
+            AddFixedExpense(tenantId, expense, messageId, now);
+            return;
+        }
+
         Guid? cardId = expense.CardId;
         if (expense.Method is PaymentMethod.CreditCard or PaymentMethod.DebitCard)
         {
+
             var kind = expense.Method == PaymentMethod.CreditCard ? CardKind.Credit : CardKind.Debit;
             if (expense.CreateCard && !string.IsNullOrWhiteSpace(expense.CardName))
             {
@@ -459,9 +508,27 @@ public sealed class InboundProcessor(
         WhatsAppMessageId = messageId
     };
 
+    private void AddFixedExpense(Guid tenantId, PendingExpense expense, string messageId, DateTimeOffset now)
+    {
+        var local = SaoPauloClock.LocalDate(now);
+        var start = expense.ChargeMonth ?? new DateOnly(local.Year, local.Month, 1);
+        db.FixedExpenses.Add(new FixedExpense
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            CreatedAt = now,
+            Amount = expense.Amount,
+            Description = expense.Description,
+            StartMonth = FixedExpenseSchedule.FirstOfMonth(start),
+            EndMonth = null,
+            WhatsAppMessageId = messageId
+        });
+    }
+
     private async Task<List<LedgerEntry>> LoadDeleteCandidatesAsync(Guid tenantId, DeleteListRequest request, CancellationToken cancellationToken)
     {
-        var query = db.Transactions.Include(entry => entry.Card).Where(entry => entry.TenantId == tenantId);
+        var query = db.Transactions.Include(entry => entry.Card)
+            .Where(entry => entry.TenantId == tenantId && entry.PaymentMethod != PaymentMethod.Fixed);
         if (request.Direction is Direction direction)
             query = query.Where(entry => entry.Direction == direction);
         if (request.From is DateOnly from && request.To is DateOnly to)
@@ -469,6 +536,22 @@ public sealed class InboundProcessor(
 
         var entries = await query.ToListAsync(cancellationToken);
         return OrderDeleteCandidates(entries, request);
+    }
+
+    private async Task<List<FixedExpense>> LoadFixedDeleteCandidatesAsync(
+        Guid tenantId,
+        FixedDeleteListRequest request,
+        CancellationToken cancellationToken)
+    {
+        var currentMonth = FixedExpenseSchedule.FirstOfMonth(SaoPauloClock.Today());
+        var entries = await db.FixedExpenses
+            .Where(entry => entry.TenantId == tenantId
+                && (entry.EndMonth == null || entry.EndMonth >= currentMonth))
+            .OrderByDescending(entry => entry.StartMonth)
+            .ThenByDescending(entry => entry.CreatedAt)
+            .Take(request.Take)
+            .ToListAsync(cancellationToken);
+        return entries;
     }
 
     internal static List<LedgerEntry> OrderDeleteCandidates(IEnumerable<LedgerEntry> entries, DeleteListRequest request)
@@ -496,7 +579,10 @@ public sealed class InboundProcessor(
 
     private async Task<string> AppendMonthBalanceAsync(Guid tenantId, string reply, MenuTurn turn, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        var month = turn.Expense?.ChargeMonth ?? turn.Income?.ChargeMonth ?? SaoPauloClock.LocalDate(now);
+        var month = turn.CloseFixed?.EndMonth
+            ?? turn.Expense?.ChargeMonth
+            ?? turn.Income?.ChargeMonth
+            ?? SaoPauloClock.LocalDate(now);
         try
         {
             var balance = await summaries.MonthBalanceAsync(tenantId, month, cancellationToken);
