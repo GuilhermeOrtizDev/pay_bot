@@ -49,4 +49,20 @@ public class DateRangeParserTests
     {
         Assert.False(DateRangeParser.TryParseMonths(text, out _, out _));
     }
+
+    [Fact]
+    public void Parses_days_or_months()
+    {
+        Assert.True(DateRangeParser.TryParseAny("10/05/2026 - 20/05/2026", out var from, out var to, out var byMonth));
+        Assert.False(byMonth);
+        Assert.Equal(new DateOnly(2026, 5, 10), from);
+        Assert.Equal(new DateOnly(2026, 5, 20), to);
+
+        Assert.True(DateRangeParser.TryParseAny("10/2026", out from, out to, out byMonth));
+        Assert.True(byMonth);
+        Assert.Equal(new DateOnly(2026, 10, 1), from);
+        Assert.Equal(new DateOnly(2026, 10, 31), to);
+
+        Assert.False(DateRangeParser.TryParseAny("ontem", out _, out _, out _));
+    }
 }

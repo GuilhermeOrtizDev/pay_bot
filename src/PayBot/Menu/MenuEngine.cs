@@ -439,7 +439,7 @@ public static class MenuEngine
         "2" => Period(draft, StartOfMonth(today.AddMonths(1)), EndOfMonth(today.AddMonths(1))),
         "3" => Period(draft, new DateOnly(today.Year, 1, 1), new DateOnly(today.Year, 12, 31)),
         "4" => AskFormat(draft, null, null, "Resumo total"),
-        "5" => Stay(MenuStep.AwaitingDateRange, draft, MenuTexts.AskMonthPeriod),
+        "5" => Stay(MenuStep.AwaitingDateRange, draft, MenuTexts.AskPeriod),
         _ => AskPeriod(draft)
     };
 
@@ -481,7 +481,7 @@ public static class MenuEngine
         if (draft.DeleteDirection is not Direction direction)
             return Stay(MenuStep.RemoveMenu, new SessionDraft(), MenuTexts.Remove);
 
-        if (!DateRangeParser.TryParse(text, out var from, out var to))
+        if (!DateRangeParser.TryParseAny(text, out var from, out var to, out _))
             return Stay(
                 MenuStep.AwaitingDeleteDateRange,
                 new SessionDraft { DeleteDirection = direction },
@@ -512,12 +512,21 @@ public static class MenuEngine
 
     private static MenuTurn OnDateRange(string text, SessionDraft draft)
     {
-        if (!DateRangeParser.TryParseMonths(text, out var from, out var to))
-            return Stay(MenuStep.AwaitingDateRange, draft, MenuTexts.InvalidMonthPeriod);
+        if (!DateRangeParser.TryParseAny(text, out var from, out var to, out var byMonth))
+            return Stay(MenuStep.AwaitingDateRange, draft, MenuTexts.InvalidPeriod);
 
-        var fromLabel = from.ToString("MM/yyyy", CultureInfo.InvariantCulture);
-        var toLabel = to.ToString("MM/yyyy", CultureInfo.InvariantCulture);
-        var title = fromLabel == toLabel ? $"Resumo de {fromLabel}" : $"Resumo de {fromLabel} a {toLabel}";
+        string title;
+        if (byMonth)
+        {
+            var fromLabel = from.ToString("MM/yyyy", CultureInfo.InvariantCulture);
+            var toLabel = to.ToString("MM/yyyy", CultureInfo.InvariantCulture);
+            title = fromLabel == toLabel ? $"Resumo de {fromLabel}" : $"Resumo de {fromLabel} a {toLabel}";
+        }
+        else
+        {
+            title = $"Resumo de {MenuTexts.FormatDate(from)} a {MenuTexts.FormatDate(to)}";
+        }
+
         return AskFormat(draft, from, to, title);
     }
 
