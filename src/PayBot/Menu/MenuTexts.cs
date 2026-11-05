@@ -14,10 +14,9 @@ public static class MenuTexts
         3 - Resumo
         4 - Remover
         5 - Desativar bot
-        6 - Registrar em texto
         """;
 
-    public const string AiOption = "\n7 - Modo IA";
+    public const string AiOption = "\n6 - Modo IA";
 
     public static string MainMenu(bool ai) => ai ? Main + AiOption : Main;
 
@@ -93,7 +92,8 @@ public static class MenuTexts
         3 - Cartao debito
         4 - Retirada de caixa
         5 - Despesa Fixa
-        6 - Outros
+        6 - Registrar em texto
+        7 - Outros
         """;
 
     public const string Summary = """

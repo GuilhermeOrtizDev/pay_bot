@@ -14,7 +14,8 @@ public class MenuEngineTests
     {
         var expense = Act("1", MenuStep.Main);
         Assert.Equal(MenuStep.ExpenseMenu, expense.NextStep);
-        Assert.Contains("6 - Outros", expense.Reply);
+        Assert.Contains("6 - Registrar em texto", expense.Reply);
+        Assert.Contains("7 - Outros", expense.Reply);
 
         var income = Act("2", MenuStep.Main);
         Assert.Equal(MenuStep.AwaitingIncomeAmount, income.NextStep);
@@ -138,7 +139,7 @@ public class MenuEngineTests
 
     [Theory]
     [InlineData("5", PaymentMethod.Fixed, "Despesa Fixa")]
-    [InlineData("6", PaymentMethod.Other, "Outros")]
+    [InlineData("7", PaymentMethod.Other, "Outros")]
     public void Fixed_and_other_expenses_start_on_the_chosen_month(string option, PaymentMethod method, string label)
     {
         var chosen = Act(option, MenuStep.ExpenseMenu);
@@ -475,7 +476,7 @@ public class MenuEngineTests
     [Fact]
     public void Text_entry_waits_for_the_block_and_examples_are_selectable()
     {
-        var entry = Act("6", MenuStep.Main);
+        var entry = Act("6", MenuStep.ExpenseMenu);
         Assert.Equal(MenuStep.AwaitingBulkEntry, entry.NextStep);
         Assert.Contains("Envie o texto do lancamento.", entry.Reply);
         Assert.Contains("1 - Registro exemplo", entry.Reply);
@@ -521,7 +522,8 @@ public class MenuEngineTests
 
         var back = Act("0", income.NextStep);
         Assert.Equal(MenuStep.Main, back.NextStep);
-        Assert.Contains("6 - Registrar em texto", back.Reply);
+        Assert.Contains("5 - Desativar bot", back.Reply);
+        Assert.DoesNotContain("Registrar em texto", back.Reply);
         Assert.DoesNotContain("Exemplos", back.Reply);
         Assert.DoesNotContain("Registro exemplo", back.Reply);
     }
@@ -804,24 +806,24 @@ public class MenuEngineTests
     public void Ai_option_is_hidden_and_ignored_when_ai_is_off()
     {
         var menu = Act("x", MenuStep.Main);
-        Assert.DoesNotContain("7 - Modo IA", menu.Reply);
+        Assert.DoesNotContain("6 - Modo IA", menu.Reply);
 
-        var seven = Act("7", MenuStep.Main);
-        Assert.Equal(MenuStep.Main, seven.NextStep);
-        Assert.DoesNotContain("7 - Modo IA", seven.Reply);
+        var six = Act("6", MenuStep.Main);
+        Assert.Equal(MenuStep.Main, six.NextStep);
+        Assert.DoesNotContain("6 - Modo IA", six.Reply);
     }
 
     [Fact]
     public void Ai_option_shows_in_every_main_menu_and_enters_ai_mode()
     {
         var menu = Act("x", MenuStep.Main, ai: true);
-        Assert.EndsWith("6 - Registrar em texto" + MenuTexts.AiOption, menu.Reply);
+        Assert.EndsWith("5 - Desativar bot" + MenuTexts.AiOption, menu.Reply);
 
         var saved = Act("pao", MenuStep.AwaitingExpenseDescription, new SessionDraft { Method = PaymentMethod.Pix, Amount = 10m }, ai: true);
         Assert.NotNull(saved.Expense);
         Assert.EndsWith(MenuTexts.AiOption, saved.Reply);
 
-        var ai = Act("7", MenuStep.Main, ai: true);
+        var ai = Act("6", MenuStep.Main, ai: true);
         Assert.Equal(MenuStep.AiMode, ai.NextStep);
         Assert.Contains("desativar IA", ai.Reply);
     }
@@ -840,7 +842,7 @@ public class MenuEngineTests
         var reply = "Gasto registrado: Pix R$ 10,00 - pao\n\n" + MenuTexts.MainMenu(true);
         var text = MenuTexts.WithMonthBalance(reply, new DateOnly(2026, 10, 1), 5m).Replace("\r\n", "\n");
         Assert.Contains("Saldo de 10/2026: R$ 5,00\n\n1 - Registrar gasto", text);
-        Assert.EndsWith("7 - Modo IA", text);
+        Assert.EndsWith("6 - Modo IA", text);
     }
 
     private static MenuTurn Act(
