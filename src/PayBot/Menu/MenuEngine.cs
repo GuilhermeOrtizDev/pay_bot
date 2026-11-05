@@ -71,7 +71,7 @@ public static class MenuEngine
     {
         if (BulkEntry.IsBlock(text))
             return CompleteBulk(BulkEntry.ReadBlock(text, cards));
-        if (aiAvailable && text == "7")
+        if (aiAvailable && text == "6")
             return Stay(MenuStep.AiMode, new SessionDraft(), MenuTexts.AiModeOn);
 
         return text switch
@@ -81,7 +81,6 @@ public static class MenuEngine
             "3" => new MenuTurn(MenuTexts.Summary, MenuStep.SummaryMenu, new SessionDraft(), null, null, null),
             "4" => new MenuTurn(MenuTexts.Remove, MenuStep.RemoveMenu, new SessionDraft(), null, null, null),
             "5" => Pause(),
-            "6" => Stay(MenuStep.AwaitingBulkEntry, new SessionDraft(), MenuTexts.BulkPrompt),
             _ => OpenMain()
         };
     }
@@ -124,6 +123,9 @@ public static class MenuEngine
 
     private static MenuTurn OnExpense(string text, SessionDraft draft)
     {
+        if (text == "6")
+            return Stay(MenuStep.AwaitingBulkEntry, new SessionDraft(), MenuTexts.BulkPrompt);
+
         var method = text switch
         {
             "1" => PaymentMethod.Pix,
@@ -131,7 +133,7 @@ public static class MenuEngine
             "3" => PaymentMethod.DebitCard,
             "4" => PaymentMethod.CashWithdrawal,
             "5" => PaymentMethod.Fixed,
-            "6" => PaymentMethod.Other,
+            "7" => PaymentMethod.Other,
             _ => (PaymentMethod?)null
         };
 
