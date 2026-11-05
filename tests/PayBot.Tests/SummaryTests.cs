@@ -4,6 +4,7 @@ using PayBot.Data;
 using PayBot.Domain;
 using PayBot.Menu;
 using PayBot.Summaries;
+using PayBot.Time;
 
 namespace PayBot.Tests;
 
@@ -178,11 +179,17 @@ public class SummaryTests
         LastUsedAt = DateTimeOffset.UnixEpoch
     };
 
-    private static LedgerEntry Income(DateOnly date, decimal amount, string description, Guid? tenant = null) => new()
+    private static LedgerEntry Income(
+        DateOnly date,
+        decimal amount,
+        string description,
+        Guid? tenant = null,
+        DateTimeOffset? createdAt = null) => new()
     {
         Id = Guid.NewGuid(),
         TenantId = tenant ?? TestDb.Tenant,
-        OccurredAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+        CreatedAt = createdAt ?? SaoPauloClock.AtNoon(date),
+        OccurredAt = SaoPauloClock.AtNoon(date),
         LocalDate = date,
         Direction = Direction.Income,
         Amount = amount,
@@ -202,8 +209,8 @@ public class SummaryTests
     {
         Id = Guid.NewGuid(),
         TenantId = tenant ?? TestDb.Tenant,
-        CreatedAt = createdAt ?? date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
-        OccurredAt = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+        CreatedAt = createdAt ?? SaoPauloClock.AtNoon(date),
+        OccurredAt = SaoPauloClock.AtNoon(date),
         LocalDate = date,
         Direction = Direction.Expense,
         Amount = amount,
@@ -271,10 +278,10 @@ public class SummaryTests
         var report = SummaryAggregator.Build(
             "Resumo de 01/10/2026 a 31/10/2026",
             [
-                new SummaryRow(new DateOnly(2026, 10, 3), Direction.Expense, 50, PaymentMethod.Pix, "padaria", null, null),
-                new SummaryRow(new DateOnly(2026, 10, 5), Direction.Expense, 1200, PaymentMethod.CreditCard, "mercado", "Nubank", 10),
-                new SummaryRow(new DateOnly(2026, 10, 1), Direction.Expense, 80, PaymentMethod.CreditCard, "netflix", "Inter", null, true),
-                new SummaryRow(new DateOnly(2026, 10, 2), Direction.Income, 3000, null, "salario", null, null)
+                new SummaryRow(new DateOnly(2026, 10, 3), Direction.Expense, 50, PaymentMethod.Pix, "padaria", null, null, CreatedAt: SaoPauloClock.AtNoon(new DateOnly(2026, 10, 3))),
+                new SummaryRow(new DateOnly(2026, 10, 5), Direction.Expense, 1200, PaymentMethod.CreditCard, "mercado", "Nubank", 10, CreatedAt: SaoPauloClock.AtNoon(new DateOnly(2026, 10, 5))),
+                new SummaryRow(new DateOnly(2026, 10, 1), Direction.Expense, 80, PaymentMethod.CreditCard, "netflix", "Inter", null, true, SaoPauloClock.AtNoon(new DateOnly(2026, 10, 1))),
+                new SummaryRow(new DateOnly(2026, 10, 2), Direction.Income, 3000, null, "salario", null, null, CreatedAt: SaoPauloClock.AtNoon(new DateOnly(2026, 10, 2)))
             ]);
         var text = System.Text.Encoding.ASCII.GetString(SummaryPdf.Render(report));
 
@@ -282,6 +289,32 @@ public class SummaryTests
         Assert.Contains("03/10/2026 Pix: R$ 50,00 - padaria", text);
         Assert.Contains("05/10/2026 Cartao credito Nubank em 10x: R$ 1.200,00 - mercado", text);
         Assert.Contains("02/10/2026 salario: R$ 3.000,00", text);
+    }
+
+    [Fact]
+    public async Task Printed_dates_use_created_at_not_local_date()
+    {
+        await using var db = await TestDb.CreateAsync();
+        var charged = new DateOnly(2026, 11, 1);
+        var created = SaoPauloClock.AtNoon(new DateOnly(2026, 10, 5));
+        db.Transactions.Add(Expense(charged, 50, PaymentMethod.Pix, createdAt: created, description: "padaria"));
+        db.Transactions.Add(Income(charged, 100, "salario", createdAt: created));
+        await db.SaveChangesAsync();
+
+        var report = await new SummaryService(db).BuildAsync(
+            TestDb.Tenant,
+            new SummaryQuery(charged, charged.AddMonths(1).AddDays(-1), "Resumo de 01/11/2026 a 30/11/2026"),
+            CancellationToken.None);
+        var text = SummaryFormatter.Format(report);
+        var pdf = System.Text.Encoding.ASCII.GetString(SummaryPdf.Render(report));
+
+        Assert.Equal(new DateOnly(2026, 10, 5), Assert.Single(report.Expenses).Date);
+        Assert.Equal(new DateOnly(2026, 10, 5), Assert.Single(report.Incomes).Date);
+        Assert.Contains("- 05/10/2026 salario", text);
+        Assert.Contains("05/10/2026 Pix: R$ 50,00 - padaria", pdf);
+        Assert.DoesNotContain("- 01/11/2026", text);
+        Assert.DoesNotContain("01/11/2026 Pix", pdf);
+        Assert.DoesNotContain("01/11/2026 salario", pdf);
     }
 
     [Fact]
@@ -332,6 +365,29 @@ public class SummaryTests
 
         Assert.Equal(["ultimo", "recente", "antigo"], latest);
         Assert.Equal(["antigo", "recente"], ranged);
+    }
+
+    [Fact]
+    public async Task Delete_candidates_can_filter_by_direction()
+    {
+        await using var db = await TestDb.CreateAsync();
+        var older = new DateTimeOffset(2026, 10, 10, 12, 0, 0, TimeSpan.Zero);
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 20), 10, PaymentMethod.Pix, createdAt: older, description: "gasto"));
+        var income = Income(new DateOnly(2026, 10, 15), 100, "salario");
+        income.CreatedAt = older.AddMinutes(1);
+        db.Transactions.Add(income);
+        await db.SaveChangesAsync();
+
+        var entries = await db.Transactions.ToListAsync();
+        var incomes = PayBot.Webhooks.InboundProcessor
+            .OrderDeleteCandidates(entries, new DeleteListRequest(null, null, 10, Direction.Income))
+            .Select(entry => entry.Description);
+        var expenses = PayBot.Webhooks.InboundProcessor
+            .OrderDeleteCandidates(entries, new DeleteListRequest(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31), 30, Direction.Expense))
+            .Select(entry => entry.Description);
+
+        Assert.Equal(["salario"], incomes);
+        Assert.Equal(["gasto"], expenses);
     }
 }
 

@@ -1,4 +1,5 @@
 using PayBot.Domain;
+using PayBot.Time;
 
 namespace PayBot.Menu;
 
@@ -74,9 +75,9 @@ public static class SummaryAggregator
             incomes.Sum(row => row.Amount),
             expenses.Sum(row => row.Amount),
             methods,
-            incomes.Select(row => new IncomeLine(row.LocalDate, row.Description ?? "", row.Amount)).ToList(),
+            incomes.Select(row => new IncomeLine(PrintedDate(row), row.Description ?? "", row.Amount)).ToList(),
             expenses.Select(row => new ExpenseLine(
-                row.LocalDate,
+                PrintedDate(row),
                 row.PaymentMethod ?? PaymentMethod.Other,
                 row.CardName,
                 row.Installments,
@@ -85,4 +86,7 @@ public static class SummaryAggregator
                 row.Amount)).ToList(),
             expensesOnly);
     }
+
+    private static DateOnly PrintedDate(SummaryRow row) =>
+        row.CreatedAt == default ? row.LocalDate : SaoPauloClock.LocalDate(row.CreatedAt);
 }

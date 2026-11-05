@@ -71,5 +71,6 @@ public enum MenuStep
     AdminAwaitingLinkTenant = 31,
     AwaitingInstallmentAmountKind = 32,
     AwaitingSummaryCard = 33,
-    AwaitingSummaryPeriod = 34
+    AwaitingSummaryPeriod = 34,
+    AwaitingDeleteScope = 35
 }

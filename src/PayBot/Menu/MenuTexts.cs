@@ -136,6 +136,13 @@ public static class MenuTexts
     public const string Remove = """
         Remover
         0 - Voltar Menu Inicial
+        1 - Entrada
+        2 - Saida
+        """;
+
+    public const string RemoveScope = """
+        Remover
+        0 - Voltar Menu Inicial
         1 - Ultimos 10 registros
         2 - Filtrar por data
         """;
