@@ -29,7 +29,8 @@ public class SummaryTests
             Resumo de 01/10/2026 a 31/10/2026
             Entradas: R$ 3.000,00
             Saidas: R$ 450,00
-            Saldo: R$ 2.550,00
+            Saldo anterior: -R$ 999,00
+            Saldo: R$ 1.551,00
 
             Saidas
             - Pix: R$ 50,00
@@ -58,7 +59,9 @@ public class SummaryTests
 
         Assert.Equal(0, report.IncomeTotal);
         Assert.Equal(25, report.ExpenseTotal);
-        Assert.Equal(-25, report.IncomeTotal - report.ExpenseTotal);
+        Assert.True(report.ShowOpeningBalance);
+        Assert.Equal(-999, report.OpeningBalance);
+        Assert.Equal(-1024, report.Balance);
     }
 
     [Fact]
@@ -77,6 +80,10 @@ public class SummaryTests
         Assert.Equal(100, report.IncomeTotal);
         Assert.Equal(40, report.ExpenseTotal);
         Assert.Equal("Resumo total", report.Title);
+        Assert.False(report.ShowOpeningBalance);
+        Assert.Equal(0, report.OpeningBalance);
+        Assert.Equal(60, report.Balance);
+        Assert.DoesNotContain("Saldo anterior", SummaryFormatter.Format(report));
     }
 
     [Fact]
@@ -96,7 +103,9 @@ public class SummaryTests
 
         Assert.Equal(30, report.IncomeTotal);
         Assert.Equal(20, report.ExpenseTotal);
-        Assert.Equal(10, report.IncomeTotal - report.ExpenseTotal);
+        Assert.True(report.ShowOpeningBalance);
+        Assert.Equal(-10, report.OpeningBalance);
+        Assert.Equal(0, report.Balance);
     }
 
     [Fact]
@@ -223,7 +232,7 @@ public class SummaryTests
     };
 
     [Fact]
-    public async Task Month_balance_is_income_minus_expenses()
+    public async Task Month_balance_includes_previous_month_closing()
     {
         await using var db = await TestDb.CreateAsync();
         db.Transactions.Add(Income(new DateOnly(2026, 10, 2), 3000, "salario"));
@@ -233,7 +242,41 @@ public class SummaryTests
 
         var balance = await new SummaryService(db).MonthBalanceAsync(TestDb.Tenant, new DateOnly(2026, 10, 15), CancellationToken.None);
 
-        Assert.Equal(2550m, balance);
+        Assert.Equal(1551m, balance);
+    }
+
+    [Fact]
+    public async Task Empty_month_carries_previous_closing_balance_forward()
+    {
+        await using var db = await TestDb.CreateAsync();
+        db.Transactions.Add(Income(new DateOnly(2026, 9, 1), 300, "salario"));
+        await db.SaveChangesAsync();
+
+        var service = new SummaryService(db);
+
+        Assert.Equal(300m, await service.MonthBalanceAsync(TestDb.Tenant, new DateOnly(2026, 10, 1), CancellationToken.None));
+        Assert.Equal(300m, await service.MonthBalanceAsync(TestDb.Tenant, new DateOnly(2026, 11, 1), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Next_month_uses_previous_closing_not_sum_of_monthly_saldos()
+    {
+        await using var db = await TestDb.CreateAsync();
+        db.Transactions.Add(Income(new DateOnly(2026, 9, 1), 300, "set"));
+        db.Transactions.Add(Income(new DateOnly(2026, 10, 1), 100, "out"));
+        await db.SaveChangesAsync();
+
+        var service = new SummaryService(db);
+        var october = await service.BuildAsync(
+            TestDb.Tenant,
+            new SummaryQuery(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31), "Resumo de 01/10/2026 a 31/10/2026"),
+            CancellationToken.None);
+        var november = await service.MonthBalanceAsync(TestDb.Tenant, new DateOnly(2026, 11, 1), CancellationToken.None);
+
+        Assert.Equal(300, october.OpeningBalance);
+        Assert.Equal(400, october.Balance);
+        Assert.Equal(400m, november);
+        Assert.NotEqual(700m, november);
     }
 
     [Fact]

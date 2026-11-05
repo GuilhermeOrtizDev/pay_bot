@@ -12,7 +12,11 @@ public static class SummaryPdf
             lines.Add($"Entradas: {MenuTexts.Money(report.IncomeTotal)}");
         lines.Add($"Saidas: {MenuTexts.Money(report.ExpenseTotal)}");
         if (!report.ExpensesOnly)
-            lines.Add($"Saldo: {MenuTexts.Money(report.IncomeTotal - report.ExpenseTotal)}");
+        {
+            if (report.ShowOpeningBalance)
+                lines.Add($"Saldo anterior: {MenuTexts.Money(report.OpeningBalance)}");
+            lines.Add($"Saldo: {MenuTexts.Money(report.Balance)}");
+        }
 
         if (report.Expenses.Count > 0)
         {

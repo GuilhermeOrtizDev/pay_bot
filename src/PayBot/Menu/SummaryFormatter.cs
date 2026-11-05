@@ -15,7 +15,11 @@ public static class SummaryFormatter
             builder.AppendLine($"Entradas: {MenuTexts.Money(report.IncomeTotal)}");
         builder.AppendLine($"Saidas: {MenuTexts.Money(report.ExpenseTotal)}");
         if (!report.ExpensesOnly)
-            builder.AppendLine($"Saldo: {MenuTexts.Money(report.IncomeTotal - report.ExpenseTotal)}");
+        {
+            if (report.ShowOpeningBalance)
+                builder.AppendLine($"Saldo anterior: {MenuTexts.Money(report.OpeningBalance)}");
+            builder.AppendLine($"Saldo: {MenuTexts.Money(report.Balance)}");
+        }
 
         if (report.Methods.Count > 0)
         {
