@@ -462,6 +462,8 @@ public sealed class InboundProcessor(
     private async Task<List<LedgerEntry>> LoadDeleteCandidatesAsync(Guid tenantId, DeleteListRequest request, CancellationToken cancellationToken)
     {
         var query = db.Transactions.Include(entry => entry.Card).Where(entry => entry.TenantId == tenantId);
+        if (request.Direction is Direction direction)
+            query = query.Where(entry => entry.Direction == direction);
         if (request.From is DateOnly from && request.To is DateOnly to)
             query = query.Where(entry => entry.LocalDate >= from && entry.LocalDate <= to);
 
@@ -471,9 +473,13 @@ public sealed class InboundProcessor(
 
     internal static List<LedgerEntry> OrderDeleteCandidates(IEnumerable<LedgerEntry> entries, DeleteListRequest request)
     {
+        var source = request.Direction is Direction direction
+            ? entries.Where(entry => entry.Direction == direction)
+            : entries;
+
         if (request.From is DateOnly from && request.To is DateOnly to)
         {
-            return entries
+            return source
                 .Where(entry => entry.LocalDate >= from && entry.LocalDate <= to)
                 .OrderByDescending(entry => entry.LocalDate)
                 .ThenByDescending(entry => entry.OccurredAt)
@@ -481,7 +487,7 @@ public sealed class InboundProcessor(
                 .ToList();
         }
 
-        return entries
+        return source
             .OrderByDescending(entry => entry.CreatedAt)
             .ThenByDescending(entry => entry.Id)
             .Take(request.Take)

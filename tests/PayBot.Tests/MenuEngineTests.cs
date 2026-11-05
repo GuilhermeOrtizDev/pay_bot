@@ -29,7 +29,8 @@ public class MenuEngineTests
 
         var remove = Act("4", MenuStep.Main);
         Assert.Equal(MenuStep.RemoveMenu, remove.NextStep);
-        Assert.Contains("1 - Ultimos 10 registros", remove.Reply);
+        Assert.Contains("1 - Entrada", remove.Reply);
+        Assert.Contains("2 - Saida", remove.Reply);
 
         var paused = Act("5", MenuStep.Main);
         Assert.Equal(MenuStep.Paused, paused.NextStep);
@@ -450,19 +451,28 @@ public class MenuEngineTests
     [Fact]
     public void Remove_lists_by_recency_or_date_and_deletes_the_selected_id()
     {
-        var latest = Act("1", MenuStep.RemoveMenu);
+        var income = Act("1", MenuStep.RemoveMenu);
+        Assert.Equal(MenuStep.AwaitingDeleteScope, income.NextStep);
+        Assert.Equal(Direction.Income, income.Draft.DeleteDirection);
+        Assert.Contains("1 - Ultimos 10 registros", income.Reply);
+
+        var latest = Act("1", income.NextStep, income.Draft);
         Assert.Equal(MenuStep.AwaitingDeleteChoice, latest.NextStep);
         Assert.Equal(10, latest.DeleteList!.Take);
+        Assert.Equal(Direction.Income, latest.DeleteList.Direction);
         Assert.Null(latest.DeleteList.From);
 
-        var ask = Act("2", MenuStep.RemoveMenu);
-        var ranged = Act("01/10/2026 - 13/10/2026", ask.NextStep);
+        var expense = Act("2", MenuStep.RemoveMenu);
+        Assert.Equal(Direction.Expense, expense.Draft.DeleteDirection);
+        var ask = Act("2", expense.NextStep, expense.Draft);
+        var ranged = Act("01/10/2026 - 13/10/2026", ask.NextStep, ask.Draft);
         Assert.Equal(new DateOnly(2026, 10, 1), ranged.DeleteList!.From);
         Assert.Equal(new DateOnly(2026, 10, 13), ranged.DeleteList.To);
+        Assert.Equal(Direction.Expense, ranged.DeleteList.Direction);
 
         var first = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         var second = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
-        var draft = new SessionDraft { DeleteIds = [first, second] };
+        var draft = new SessionDraft { DeleteIds = [first, second], DeleteDirection = Direction.Expense };
         var deleted = Act("2", MenuStep.AwaitingDeleteChoice, draft);
         Assert.Equal(second, deleted.DeleteId);
         Assert.Equal(MenuStep.RemoveMenu, deleted.NextStep);

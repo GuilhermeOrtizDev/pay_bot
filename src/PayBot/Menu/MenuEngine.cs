@@ -61,7 +61,8 @@ public static class MenuEngine
             MenuStep.AwaitingSummaryOutput => OnSummaryOutput(text, draft),
             MenuStep.AwaitingDateRange => OnDateRange(text, draft),
             MenuStep.RemoveMenu => OnRemove(text),
-            MenuStep.AwaitingDeleteDateRange => OnDeleteDateRange(text),
+            MenuStep.AwaitingDeleteScope => OnDeleteScope(text, draft),
+            MenuStep.AwaitingDeleteDateRange => OnDeleteDateRange(text, draft),
             MenuStep.AwaitingDeleteChoice => OnDeleteChoice(text, draft),
             _ => OpenMain()
         };
@@ -444,24 +445,56 @@ public static class MenuEngine
 
     private static MenuTurn OnRemove(string text) => text switch
     {
-        "1" => new MenuTurn("", MenuStep.AwaitingDeleteChoice, new SessionDraft(), null, null, null, new DeleteListRequest(null, null, 10)),
-        "2" => Stay(MenuStep.AwaitingDeleteDateRange, new SessionDraft(), MenuTexts.AskPeriod),
+        "1" => Stay(MenuStep.AwaitingDeleteScope, new SessionDraft { DeleteDirection = Direction.Income }, MenuTexts.RemoveScope),
+        "2" => Stay(MenuStep.AwaitingDeleteScope, new SessionDraft { DeleteDirection = Direction.Expense }, MenuTexts.RemoveScope),
         _ => Stay(MenuStep.RemoveMenu, new SessionDraft(), MenuTexts.Remove)
     };
 
-    private static MenuTurn OnDeleteDateRange(string text)
+    private static MenuTurn OnDeleteScope(string text, SessionDraft draft)
     {
+        if (draft.DeleteDirection is not Direction direction)
+            return Stay(MenuStep.RemoveMenu, new SessionDraft(), MenuTexts.Remove);
+
+        return text switch
+        {
+            "1" => new MenuTurn(
+                "",
+                MenuStep.AwaitingDeleteChoice,
+                new SessionDraft { DeleteDirection = direction },
+                null,
+                null,
+                null,
+                new DeleteListRequest(null, null, 10, direction)),
+            "2" => Stay(
+                MenuStep.AwaitingDeleteDateRange,
+                new SessionDraft { DeleteDirection = direction },
+                MenuTexts.AskPeriod),
+            _ => Stay(
+                MenuStep.AwaitingDeleteScope,
+                new SessionDraft { DeleteDirection = direction },
+                MenuTexts.RemoveScope)
+        };
+    }
+
+    private static MenuTurn OnDeleteDateRange(string text, SessionDraft draft)
+    {
+        if (draft.DeleteDirection is not Direction direction)
+            return Stay(MenuStep.RemoveMenu, new SessionDraft(), MenuTexts.Remove);
+
         if (!DateRangeParser.TryParse(text, out var from, out var to))
-            return Stay(MenuStep.AwaitingDeleteDateRange, new SessionDraft(), MenuTexts.InvalidPeriod);
+            return Stay(
+                MenuStep.AwaitingDeleteDateRange,
+                new SessionDraft { DeleteDirection = direction },
+                MenuTexts.InvalidPeriod);
 
         return new MenuTurn(
             "",
             MenuStep.AwaitingDeleteChoice,
-            new SessionDraft(),
+            new SessionDraft { DeleteDirection = direction },
             null,
             null,
             null,
-            new DeleteListRequest(from, to, 30));
+            new DeleteListRequest(from, to, 30, direction));
     }
 
     private static MenuTurn OnDeleteChoice(string text, SessionDraft draft)

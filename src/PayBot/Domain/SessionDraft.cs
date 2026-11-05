@@ -11,6 +11,7 @@ public sealed class SessionDraft
     public string? CardName { get; set; }
     public bool CreateCard { get; set; }
     public List<Guid> DeleteIds { get; set; } = [];
+    public Direction? DeleteDirection { get; set; }
     public DateOnly? SummaryFrom { get; set; }
     public DateOnly? SummaryTo { get; set; }
     public string? SummaryTitle { get; set; }
@@ -34,6 +35,7 @@ public sealed class SessionDraft
         CardName = CardName,
         CreateCard = CreateCard,
         DeleteIds = (DeleteIds ?? []).ToList(),
+        DeleteDirection = DeleteDirection,
         SummaryFrom = SummaryFrom,
         SummaryTo = SummaryTo,
         SummaryTitle = SummaryTitle,

@@ -333,6 +333,29 @@ public class SummaryTests
         Assert.Equal(["ultimo", "recente", "antigo"], latest);
         Assert.Equal(["antigo", "recente"], ranged);
     }
+
+    [Fact]
+    public async Task Delete_candidates_can_filter_by_direction()
+    {
+        await using var db = await TestDb.CreateAsync();
+        var older = new DateTimeOffset(2026, 10, 10, 12, 0, 0, TimeSpan.Zero);
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 20), 10, PaymentMethod.Pix, createdAt: older, description: "gasto"));
+        var income = Income(new DateOnly(2026, 10, 15), 100, "salario");
+        income.CreatedAt = older.AddMinutes(1);
+        db.Transactions.Add(income);
+        await db.SaveChangesAsync();
+
+        var entries = await db.Transactions.ToListAsync();
+        var incomes = PayBot.Webhooks.InboundProcessor
+            .OrderDeleteCandidates(entries, new DeleteListRequest(null, null, 10, Direction.Income))
+            .Select(entry => entry.Description);
+        var expenses = PayBot.Webhooks.InboundProcessor
+            .OrderDeleteCandidates(entries, new DeleteListRequest(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31), 30, Direction.Expense))
+            .Select(entry => entry.Description);
+
+        Assert.Equal(["salario"], incomes);
+        Assert.Equal(["gasto"], expenses);
+    }
 }
 
 file static class TestDb
