@@ -36,7 +36,12 @@ public sealed record SummaryReport(
     IReadOnlyList<MethodTotal> Methods,
     IReadOnlyList<IncomeLine> Incomes,
     IReadOnlyList<ExpenseLine> Expenses,
-    bool ExpensesOnly = false);
+    bool ExpensesOnly = false,
+    decimal OpeningBalance = 0,
+    bool ShowOpeningBalance = false)
+{
+    public decimal Balance => OpeningBalance + IncomeTotal - ExpenseTotal;
+}
 
 public static class SummaryAggregator
 {
