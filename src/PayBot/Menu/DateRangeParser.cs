@@ -24,6 +24,26 @@ public static partial class DateRangeParser
         return from <= to;
     }
 
+    public static bool TryParseAny(string? text, out DateOnly from, out DateOnly to, out bool byMonth)
+    {
+        if (TryParse(text, out from, out to))
+        {
+            byMonth = false;
+            return true;
+        }
+
+        if (TryParseMonths(text, out from, out to))
+        {
+            byMonth = true;
+            return true;
+        }
+
+        from = default;
+        to = default;
+        byMonth = false;
+        return false;
+    }
+
     public static bool TryParseMonths(string? text, out DateOnly from, out DateOnly to)
     {
         from = default;

@@ -359,6 +359,8 @@ public class MenuEngineTests
 
         var ask = Act("5", MenuStep.AwaitingSummaryPeriod);
         Assert.Equal(MenuStep.AwaitingDateRange, ask.NextStep);
+        Assert.Contains("Mes:", ask.Reply);
+        Assert.Contains("Dias:", ask.Reply);
 
         var single = Act("01/2025", ask.NextStep);
         Assert.Equal(MenuStep.AwaitingSummaryOutput, single.NextStep);
@@ -372,10 +374,16 @@ public class MenuEngineTests
         Assert.Equal(new DateOnly(2025, 2, 28), range.Draft.SummaryTo);
         Assert.Equal("Resumo de 01/2025 a 02/2025", range.Draft.SummaryTitle);
 
+        var days = Act("10/05/2026 - 20/05/2026", ask.NextStep);
+        Assert.Equal(MenuStep.AwaitingSummaryOutput, days.NextStep);
+        Assert.Equal(new DateOnly(2026, 5, 10), days.Draft.SummaryFrom);
+        Assert.Equal(new DateOnly(2026, 5, 20), days.Draft.SummaryTo);
+        Assert.Equal("Resumo de 10/05/2026 a 20/05/2026", days.Draft.SummaryTitle);
+
         var invalid = Act("ontem", MenuStep.AwaitingDateRange);
         Assert.Equal(MenuStep.AwaitingDateRange, invalid.NextStep);
         Assert.Null(invalid.Summary);
-        Assert.Contains("Mes invalido", invalid.Reply);
+        Assert.Contains("Periodo invalido", invalid.Reply);
 
     }
 
@@ -465,10 +473,26 @@ public class MenuEngineTests
         var expense = Act("2", MenuStep.RemoveMenu);
         Assert.Equal(Direction.Expense, expense.Draft.DeleteDirection);
         var ask = Act("2", expense.NextStep, expense.Draft);
+        Assert.Contains("Mes:", ask.Reply);
+        Assert.Contains("Dias:", ask.Reply);
+
         var ranged = Act("01/10/2026 - 13/10/2026", ask.NextStep, ask.Draft);
         Assert.Equal(new DateOnly(2026, 10, 1), ranged.DeleteList!.From);
         Assert.Equal(new DateOnly(2026, 10, 13), ranged.DeleteList.To);
         Assert.Equal(Direction.Expense, ranged.DeleteList.Direction);
+
+        var byMonth = Act("10/2026", ask.NextStep, ask.Draft);
+        Assert.Equal(new DateOnly(2026, 10, 1), byMonth.DeleteList!.From);
+        Assert.Equal(new DateOnly(2026, 10, 31), byMonth.DeleteList.To);
+
+        var monthRange = Act("01/2025 - 02/2025", ask.NextStep, ask.Draft);
+        Assert.Equal(new DateOnly(2025, 1, 1), monthRange.DeleteList!.From);
+        Assert.Equal(new DateOnly(2025, 2, 28), monthRange.DeleteList.To);
+
+        var invalidPeriod = Act("ontem", ask.NextStep, ask.Draft);
+        Assert.Null(invalidPeriod.DeleteList);
+        Assert.Equal(MenuStep.AwaitingDeleteDateRange, invalidPeriod.NextStep);
+        Assert.Contains("Periodo invalido", invalidPeriod.Reply);
 
         var first = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         var second = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");

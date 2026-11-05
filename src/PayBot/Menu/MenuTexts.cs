@@ -167,13 +167,21 @@ public static class MenuTexts
         """;
     public const string AskCardName = "Informe o nome do cartao";
     public const string AskDescription = "Informe a descricao";
-    public const string AskPeriod = "Informe o periodo. Ex: 10/05/2026 - 20/05/2026";
-    public const string AskMonthPeriod = "Informe o mes. Ex: 01/2025 ou 01/2025 - 02/2025";
+    public const string AskPeriod = """
+        Informe o periodo
+        Mes: 01/2025 ou 01/2025 - 02/2025
+        Dias: 10/05/2026 - 20/05/2026
+        """;
+    public const string AskMonthPeriod = AskPeriod;
     public const string AskChargeMonth = "A partir de qual mes? Ex: 10/2026";
     public const string InvalidAmount = "Valor invalido. Ex: 32,50";
     public const string InvalidInstallments = "Numero de parcelas invalido. Ex: 10";
-    public const string InvalidPeriod = "Periodo invalido. Ex: 10/05/2026 - 20/05/2026";
-    public const string InvalidMonthPeriod = "Mes invalido. Ex: 01/2025 ou 01/2025 - 02/2025";
+    public const string InvalidPeriod = """
+        Periodo invalido
+        Mes: 01/2025 ou 01/2025 - 02/2025
+        Dias: 10/05/2026 - 20/05/2026
+        """;
+    public const string InvalidMonthPeriod = InvalidPeriod;
     public const string InvalidChargeMonth = "Mes invalido. Ex: 10/2026";
     public const string SaveFailed = "Nao consegui registrar. Tente de novo.";
     public const string InvalidCardName = "Nome do cartao invalido.";
