@@ -64,9 +64,12 @@ public static class MenuEngine
             MenuStep.AwaitingDeleteScope => OnDeleteScope(text, draft),
             MenuStep.AwaitingDeleteDateRange => OnDeleteDateRange(text, draft),
             MenuStep.AwaitingDeleteChoice => OnDeleteChoice(text, draft),
+            MenuStep.AwaitingFixedDeleteChoice => OnFixedDeleteChoice(text, draft),
+            MenuStep.AwaitingFixedEndMonth => OnFixedEndMonth(text, draft),
             _ => OpenMain()
         };
     }
+
 
     private static MenuTurn OnMain(string text, IReadOnlyList<KnownCard> cards, bool aiAvailable)
     {
@@ -447,8 +450,17 @@ public static class MenuEngine
     {
         "1" => Stay(MenuStep.AwaitingDeleteScope, new SessionDraft { DeleteDirection = Direction.Income }, MenuTexts.RemoveScope),
         "2" => Stay(MenuStep.AwaitingDeleteScope, new SessionDraft { DeleteDirection = Direction.Expense }, MenuTexts.RemoveScope),
+        "3" => new MenuTurn(
+            "",
+            MenuStep.AwaitingFixedDeleteChoice,
+            new SessionDraft(),
+            null,
+            null,
+            null,
+            FixedDeleteList: new FixedDeleteListRequest()),
         _ => Stay(MenuStep.RemoveMenu, new SessionDraft(), MenuTexts.Remove)
     };
+
 
     private static MenuTurn OnDeleteScope(string text, SessionDraft draft)
     {
@@ -508,6 +520,40 @@ public static class MenuEngine
         }
 
         return Stay(MenuStep.AwaitingDeleteChoice, draft, MenuTexts.InvalidDeleteId);
+    }
+
+    private static MenuTurn OnFixedDeleteChoice(string text, SessionDraft draft)
+    {
+        var ids = draft.DeleteIds ?? [];
+        if (int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var index)
+            && index >= 1
+            && index <= ids.Count)
+        {
+            return Stay(
+                MenuStep.AwaitingFixedEndMonth,
+                new SessionDraft { FixedDeleteId = ids[index - 1] },
+                MenuTexts.AskFixedEndMonth);
+        }
+
+        return Stay(MenuStep.AwaitingFixedDeleteChoice, draft, MenuTexts.InvalidDeleteId);
+    }
+
+    private static MenuTurn OnFixedEndMonth(string text, SessionDraft draft)
+    {
+        if (draft.FixedDeleteId is not Guid id)
+            return Stay(MenuStep.RemoveMenu, new SessionDraft(), MenuTexts.Remove);
+
+        if (!TryParseMonth(text, out var endMonth))
+            return Stay(MenuStep.AwaitingFixedEndMonth, draft, MenuTexts.InvalidFixedEndMonth);
+
+        return new MenuTurn(
+            "",
+            MenuStep.RemoveMenu,
+            new SessionDraft(),
+            null,
+            null,
+            null,
+            CloseFixed: new CloseFixedExpense(id, endMonth));
     }
 
     private static MenuTurn OnDateRange(string text, SessionDraft draft)

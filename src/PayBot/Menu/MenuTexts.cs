@@ -138,7 +138,9 @@ public static class MenuTexts
         0 - Voltar Menu Inicial
         1 - Entrada
         2 - Saida
+        3 - Despesa Fixa
         """;
+
 
     public const string RemoveScope = """
         Remover
@@ -174,6 +176,7 @@ public static class MenuTexts
         """;
     public const string AskMonthPeriod = AskPeriod;
     public const string AskChargeMonth = "A partir de qual mes? Ex: 10/2026";
+    public const string AskFixedEndMonth = "Ate qual mes? Ex: 10/2026";
     public const string InvalidAmount = "Valor invalido. Ex: 32,50";
     public const string InvalidInstallments = "Numero de parcelas invalido. Ex: 10";
     public const string InvalidPeriod = """
@@ -183,12 +186,14 @@ public static class MenuTexts
         """;
     public const string InvalidMonthPeriod = InvalidPeriod;
     public const string InvalidChargeMonth = "Mes invalido. Ex: 10/2026";
+    public const string InvalidFixedEndMonth = "Mes final invalido. Deve ser igual ou depois do inicio. Ex: 10/2026";
     public const string SaveFailed = "Nao consegui registrar. Tente de novo.";
     public const string InvalidCardName = "Nome do cartao invalido.";
     public const string InvalidDescription = "Descricao invalida.";
     public const string InvalidDeleteId = "Id invalido.";
     public const string NoRecords = "Nenhum registro.";
     public const string RecordNotFound = "Registro nao encontrado.";
+
 
     public const string Admin = """
         Administracao

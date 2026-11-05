@@ -43,4 +43,35 @@ public static class DeleteListFormatter
             return MenuTexts.MethodLabel(payment);
         return "Registro";
     }
+
+    public static string FormatFixed(IReadOnlyList<FixedExpense> entries)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("Selecione a despesa fixa para encerrar");
+        builder.AppendLine("0 - Voltar Menu Inicial");
+        builder.Append(FormatFixedChoices(entries));
+        return builder.ToString().TrimEnd();
+    }
+
+    public static string FormatFixedChoices(IReadOnlyList<FixedExpense> entries)
+    {
+        var builder = new StringBuilder();
+        for (var i = 0; i < entries.Count; i++)
+            builder.AppendLine($"{i + 1} - {FixedLine(entries[i])}");
+        return builder.ToString().TrimEnd();
+    }
+
+    public static string FixedLine(FixedExpense entry)
+    {
+        var start = entry.StartMonth.ToString("MM/yyyy", CultureInfo.InvariantCulture);
+        var name = string.IsNullOrWhiteSpace(entry.Description) ? "Despesa Fixa" : entry.Description.Trim();
+        if (entry.EndMonth is DateOnly end)
+        {
+            var until = end.ToString("MM/yyyy", CultureInfo.InvariantCulture);
+            return $"{name} - {MenuTexts.Money(entry.Amount)} - desde {start} ate {until}";
+        }
+
+        return $"{name} - {MenuTexts.Money(entry.Amount)} - desde {start}";
+    }
 }
+

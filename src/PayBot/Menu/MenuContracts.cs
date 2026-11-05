@@ -18,7 +18,12 @@ public sealed record PendingExpense(
 
 public sealed record DeleteListRequest(DateOnly? From, DateOnly? To, int Take, Direction? Direction = null);
 
+public sealed record FixedDeleteListRequest(int Take = 30);
+
+public sealed record CloseFixedExpense(Guid Id, DateOnly EndMonth);
+
 public sealed record PendingIncome(decimal Amount, string Description, DateOnly ChargeMonth);
+
 
 public sealed record SummaryQuery(
     DateOnly? From,
@@ -47,4 +52,7 @@ public sealed record MenuTurn(
     DeleteListRequest? DeleteList = null,
     Guid? DeleteId = null,
     bool AsPdf = false,
-    AdminChange? Admin = null);
+    AdminChange? Admin = null,
+    FixedDeleteListRequest? FixedDeleteList = null,
+    CloseFixedExpense? CloseFixed = null);
+

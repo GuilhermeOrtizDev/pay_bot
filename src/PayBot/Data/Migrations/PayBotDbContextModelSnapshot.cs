@@ -87,6 +87,48 @@ namespace PayBot.Data.Migrations
                     b.ToTable("sessions", (string)null);
                 });
 
+            modelBuilder.Entity("PayBot.Domain.FixedExpense", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("numeric(14,2)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateOnly?>("EndMonth")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("StartMonth")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("WhatsAppMessageId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WhatsAppMessageId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "StartMonth");
+
+                    b.ToTable("fixed_expenses", (string)null);
+                });
+
             modelBuilder.Entity("PayBot.Domain.LedgerEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -216,6 +258,15 @@ namespace PayBot.Data.Migrations
                 });
 
             modelBuilder.Entity("PayBot.Domain.Card", b =>
+                {
+                    b.HasOne("PayBot.Domain.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PayBot.Domain.FixedExpense", b =>
                 {
                     b.HasOne("PayBot.Domain.Tenant", null)
                         .WithMany()
