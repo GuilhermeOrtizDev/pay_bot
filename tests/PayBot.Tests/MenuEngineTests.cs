@@ -228,12 +228,16 @@ public class MenuEngineTests
         var fixedChoice = Act("2", debit.NextStep, debit.Draft);
         var amount = Act("40,00", fixedChoice.NextStep, fixedChoice.Draft, Cards());
         var card = Act("1", amount.NextStep, amount.Draft, Cards());
-        var saved = Act("netflix", card.NextStep, card.Draft, Cards());
+        var described = Act("netflix", card.NextStep, card.Draft, Cards());
+        Assert.Equal(MenuStep.AwaitingChargeMonth, described.NextStep);
 
+        var saved = Act("09/2026", described.NextStep, described.Draft, Cards());
         Assert.True(saved.Expense!.IsFixed);
         Assert.Equal(InterId, saved.Expense.CardId);
         Assert.Equal("netflix", saved.Expense.Description);
+        Assert.Equal(new DateOnly(2026, 9, 1), saved.Expense.ChargeMonth);
         Assert.Contains("fixo", saved.Reply);
+        Assert.Contains("a partir de 09/2026", saved.Reply);
     }
 
     [Fact]
@@ -700,15 +704,13 @@ public class MenuEngineTests
         Assert.Contains("a vista", saved.Reply);
     }
 
-    [Theory]
-    [InlineData("a vista", false)]
-    [InlineData("fixo", true)]
-    public void Bulk_debit_skips_the_month(string billing, bool isFixed)
+    [Fact]
+    public void Bulk_debit_in_full_skips_the_month()
     {
-        var saved = Act($"""
+        var saved = Act("""
             gasto
             tipo: cartao debito
-            cobranca: {billing}
+            cobranca: a vista
             valor: 45,00
             cartao: Inter
             descricao: almoco
@@ -716,9 +718,28 @@ public class MenuEngineTests
             """, MenuStep.Main, cards: Cards());
 
         Assert.Equal(InterId, saved.Expense!.CardId);
-        Assert.Equal(isFixed, saved.Expense.IsFixed);
+        Assert.False(saved.Expense.IsFixed);
         Assert.Null(saved.Expense.ChargeMonth);
         Assert.DoesNotContain("a partir de", saved.Reply);
+    }
+
+    [Fact]
+    public void Bulk_debit_fixed_keeps_the_month()
+    {
+        var saved = Act("""
+            gasto
+            tipo: cartao debito
+            cobranca: fixo
+            valor: 45,00
+            cartao: Inter
+            descricao: netflix
+            mes: 10/2026
+            """, MenuStep.Main, cards: Cards());
+
+        Assert.Equal(InterId, saved.Expense!.CardId);
+        Assert.True(saved.Expense.IsFixed);
+        Assert.Equal(new DateOnly(2026, 10, 1), saved.Expense.ChargeMonth);
+        Assert.Contains("a partir de 10/2026", saved.Reply);
     }
 
     [Fact]

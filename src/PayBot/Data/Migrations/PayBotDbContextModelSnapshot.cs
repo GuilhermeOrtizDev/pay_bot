@@ -97,6 +97,9 @@ namespace PayBot.Data.Migrations
                         .HasPrecision(14, 2)
                         .HasColumnType("numeric(14,2)");
 
+                    b.Property<Guid?>("CardId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -107,6 +110,9 @@ namespace PayBot.Data.Migrations
 
                     b.Property<DateOnly?>("EndMonth")
                         .HasColumnType("date");
+
+                    b.Property<int>("Method")
+                        .HasColumnType("integer");
 
                     b.Property<DateOnly>("StartMonth")
                         .HasColumnType("date");
@@ -120,6 +126,8 @@ namespace PayBot.Data.Migrations
                         .HasColumnType("character varying(128)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CardId");
 
                     b.HasIndex("WhatsAppMessageId")
                         .IsUnique();
@@ -268,11 +276,18 @@ namespace PayBot.Data.Migrations
 
             modelBuilder.Entity("PayBot.Domain.FixedExpense", b =>
                 {
+                    b.HasOne("PayBot.Domain.Card", "Card")
+                        .WithMany()
+                        .HasForeignKey("CardId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("PayBot.Domain.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Card");
                 });
 
             modelBuilder.Entity("PayBot.Domain.LedgerEntry", b =>

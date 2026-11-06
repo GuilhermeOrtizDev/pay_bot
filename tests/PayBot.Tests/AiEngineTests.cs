@@ -245,6 +245,17 @@ public class AiEngineTests
     }
 
     [Fact]
+    public void Remove_card_fixed_via_billing_asks_for_end_month()
+    {
+        var list = Interpret(
+            new AiIntent(AiAction.Remove, Fields(("tipo", "cartao credito"), ("cobranca", "fixo"))),
+            MenuStep.AiMode,
+            new SessionDraft());
+        Assert.NotNull(list.FixedDeleteList);
+        Assert.Null(list.DeleteList);
+    }
+
+    [Fact]
     public void Parses_the_model_json()
     {
         var intent = OpenAiClient.ParseIntent("""

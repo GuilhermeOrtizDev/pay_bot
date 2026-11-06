@@ -304,13 +304,18 @@ public class SummaryTests
         decimal amount,
         string description,
         DateOnly? endMonth = null,
-        Guid? tenant = null) => new()
+        Guid? tenant = null,
+        PaymentMethod method = PaymentMethod.Fixed,
+        Card? card = null) => new()
     {
         Id = Guid.NewGuid(),
         TenantId = tenant ?? TestDb.Tenant,
         CreatedAt = SaoPauloClock.AtNoon(startMonth),
         Amount = amount,
         Description = description,
+        Method = method,
+        CardId = card?.Id,
+        Card = card,
         StartMonth = startMonth,
         EndMonth = endMonth,
         WhatsAppMessageId = Guid.NewGuid().ToString("N")
@@ -542,6 +547,66 @@ public class SummaryTests
 
         var closed = Fixed(new DateOnly(2026, 9, 1), 1500, "aluguel", new DateOnly(2026, 11, 1));
         Assert.Equal("aluguel - R$ 1.500,00 - desde 09/2026 ate 11/2026", DeleteListFormatter.FixedLine(closed));
+
+        var card = Card(CardKind.Credit, "Inter");
+        var cardFixed = Fixed(
+            new DateOnly(2026, 9, 1),
+            80,
+            "netflix",
+            method: PaymentMethod.CreditCard,
+            card: card);
+        Assert.Equal(
+            "netflix - R$ 80,00 - Cartao credito Inter - desde 09/2026",
+            DeleteListFormatter.FixedLine(cardFixed));
+    }
+
+    [Fact]
+    public async Task Card_fixed_expense_expands_and_respects_filters()
+    {
+        await using var db = await TestDb.CreateAsync();
+        var inter = Card(CardKind.Credit, "Inter");
+        var nubank = Card(CardKind.Credit, "Nubank");
+        db.Cards.AddRange(inter, nubank);
+        db.FixedExpenses.Add(Fixed(
+            new DateOnly(2026, 9, 1),
+            80,
+            "netflix",
+            method: PaymentMethod.CreditCard,
+            card: inter));
+        db.FixedExpenses.Add(Fixed(new DateOnly(2026, 9, 1), 1500, "aluguel"));
+        await db.SaveChangesAsync();
+
+        var service = new SummaryService(db);
+        var period = await service.BuildAsync(
+            TestDb.Tenant,
+            new SummaryQuery(new DateOnly(2026, 9, 1), new DateOnly(2026, 11, 30), "Resumo"),
+            CancellationToken.None);
+        Assert.Equal(80 * 3 + 1500 * 3, period.ExpenseTotal);
+
+        var byCard = await service.BuildAsync(
+            TestDb.Tenant,
+            new SummaryQuery(
+                new DateOnly(2026, 10, 1),
+                new DateOnly(2026, 10, 31),
+                "Resumo - Cartao credito Inter",
+                PaymentMethod.CreditCard,
+                inter.Id),
+            CancellationToken.None);
+        Assert.Equal(80, byCard.ExpenseTotal);
+        Assert.Single(byCard.Expenses);
+        Assert.Equal("netflix", byCard.Expenses[0].Description);
+        Assert.True(byCard.Expenses[0].IsFixed);
+
+        var onlyFixed = await service.BuildAsync(
+            TestDb.Tenant,
+            new SummaryQuery(
+                new DateOnly(2026, 10, 1),
+                new DateOnly(2026, 10, 31),
+                "Resumo - Despesa Fixa",
+                PaymentMethod.Fixed),
+            CancellationToken.None);
+        Assert.Equal(1500, onlyFixed.ExpenseTotal);
+        Assert.DoesNotContain(onlyFixed.Expenses, line => line.Description == "netflix");
     }
 }
 

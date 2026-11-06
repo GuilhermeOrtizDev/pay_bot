@@ -65,13 +65,16 @@ public static class DeleteListFormatter
     {
         var start = entry.StartMonth.ToString("MM/yyyy", CultureInfo.InvariantCulture);
         var name = string.IsNullOrWhiteSpace(entry.Description) ? "Despesa Fixa" : entry.Description.Trim();
+        var method = entry.Method is PaymentMethod.CreditCard or PaymentMethod.DebitCard
+            ? $" - {MenuTexts.MethodLabel(entry.Method)}{(entry.Card is null ? "" : " " + entry.Card.Name)}"
+            : "";
         if (entry.EndMonth is DateOnly end)
         {
             var until = end.ToString("MM/yyyy", CultureInfo.InvariantCulture);
-            return $"{name} - {MenuTexts.Money(entry.Amount)} - desde {start} ate {until}";
+            return $"{name} - {MenuTexts.Money(entry.Amount)}{method} - desde {start} ate {until}";
         }
 
-        return $"{name} - {MenuTexts.Money(entry.Amount)} - desde {start}";
+        return $"{name} - {MenuTexts.Money(entry.Amount)}{method} - desde {start}";
     }
 }
 

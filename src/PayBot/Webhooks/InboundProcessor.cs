@@ -232,6 +232,7 @@ public sealed class InboundProcessor(
         if (turn.CloseFixed is { } closeFixed)
         {
             var entry = await db.FixedExpenses
+                .Include(item => item.Card)
                 .FirstOrDefaultAsync(item => item.Id == closeFixed.Id && item.TenantId == tenant, cancellationToken);
             var menu = aiTurn ? "" : "\n\n" + MenuTexts.Remove;
             if (entry is null)
@@ -397,16 +398,9 @@ public sealed class InboundProcessor(
 
     private async Task AddExpenseAsync(Guid tenantId, PendingExpense expense, string messageId, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        if (expense.Method == PaymentMethod.Fixed)
-        {
-            AddFixedExpense(tenantId, expense, messageId, now);
-            return;
-        }
-
         Guid? cardId = expense.CardId;
         if (expense.Method is PaymentMethod.CreditCard or PaymentMethod.DebitCard)
         {
-
             var kind = expense.Method == PaymentMethod.CreditCard ? CardKind.Credit : CardKind.Debit;
             if (expense.CreateCard && !string.IsNullOrWhiteSpace(expense.CardName))
             {
@@ -443,6 +437,12 @@ public sealed class InboundProcessor(
                 else
                     cardId = null;
             }
+        }
+
+        if (expense.Method == PaymentMethod.Fixed || expense.IsFixed)
+        {
+            AddFixedExpense(tenantId, expense, cardId, messageId, now);
+            return;
         }
 
         var local = SaoPauloClock.LocalDate(now);
@@ -508,7 +508,12 @@ public sealed class InboundProcessor(
         WhatsAppMessageId = messageId
     };
 
-    private void AddFixedExpense(Guid tenantId, PendingExpense expense, string messageId, DateTimeOffset now)
+    private void AddFixedExpense(
+        Guid tenantId,
+        PendingExpense expense,
+        Guid? cardId,
+        string messageId,
+        DateTimeOffset now)
     {
         var local = SaoPauloClock.LocalDate(now);
         var start = expense.ChargeMonth ?? new DateOnly(local.Year, local.Month, 1);
@@ -519,6 +524,8 @@ public sealed class InboundProcessor(
             CreatedAt = now,
             Amount = expense.Amount,
             Description = expense.Description,
+            Method = expense.Method,
+            CardId = cardId,
             StartMonth = FixedExpenseSchedule.FirstOfMonth(start),
             EndMonth = null,
             WhatsAppMessageId = messageId
@@ -528,7 +535,9 @@ public sealed class InboundProcessor(
     private async Task<List<LedgerEntry>> LoadDeleteCandidatesAsync(Guid tenantId, DeleteListRequest request, CancellationToken cancellationToken)
     {
         var query = db.Transactions.Include(entry => entry.Card)
-            .Where(entry => entry.TenantId == tenantId && entry.PaymentMethod != PaymentMethod.Fixed);
+            .Where(entry => entry.TenantId == tenantId
+                && entry.PaymentMethod != PaymentMethod.Fixed
+                && !entry.IsFixed);
         if (request.Direction is Direction direction)
             query = query.Where(entry => entry.Direction == direction);
         if (request.From is DateOnly from && request.To is DateOnly to)
@@ -545,6 +554,7 @@ public sealed class InboundProcessor(
     {
         var currentMonth = FixedExpenseSchedule.FirstOfMonth(SaoPauloClock.Today());
         var entries = await db.FixedExpenses
+            .Include(entry => entry.Card)
             .Where(entry => entry.TenantId == tenantId
                 && (entry.EndMonth == null || entry.EndMonth >= currentMonth))
             .OrderByDescending(entry => entry.StartMonth)

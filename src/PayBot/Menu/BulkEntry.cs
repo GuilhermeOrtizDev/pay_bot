@@ -110,7 +110,7 @@ public static class BulkEntry
                 draft.Installments = null;
                 draft.AmountKind = null;
             }
-            if (draft.Method == PaymentMethod.DebitCard)
+            if (draft.Method == PaymentMethod.DebitCard && draft.Billing != CardBilling.Fixed)
                 draft.ChargeMonth = null;
             ResolveCard(draft, cards);
             return;
@@ -122,7 +122,7 @@ public static class BulkEntry
             draft.Installments = null;
             draft.AmountKind = null;
             ClearCard(draft);
-            if (!NeedsMonth(draft.Method.Value))
+            if (!NeedsMonth(draft))
                 draft.ChargeMonth = null;
         }
     }
@@ -162,7 +162,7 @@ public static class BulkEntry
             problems.Add("cartao");
         if (string.IsNullOrWhiteSpace(draft.Description))
             problems.Add("descricao");
-        if (draft.Method is PaymentMethod method && NeedsMonth(method) && draft.ChargeMonth is null)
+        if (NeedsMonth(draft) && draft.ChargeMonth is null)
             problems.Add("mes");
         return problems;
     }
@@ -199,8 +199,9 @@ public static class BulkEntry
         draft.CreateCard = false;
     }
 
-    private static bool NeedsMonth(PaymentMethod method) =>
-        method is PaymentMethod.CreditCard or PaymentMethod.Fixed or PaymentMethod.Other;
+    private static bool NeedsMonth(SessionDraft draft) =>
+        draft.Method is PaymentMethod.CreditCard or PaymentMethod.Fixed or PaymentMethod.Other
+        || (draft.Method == PaymentMethod.DebitCard && draft.Billing == CardBilling.Fixed);
 
     private static PaymentMethod? ParseMethod(string text) => Fold(text) switch
     {

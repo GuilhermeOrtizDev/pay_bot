@@ -17,7 +17,9 @@ public sealed class SummaryService(PayBotDbContext db)
         if (methodFilter is null or not PaymentMethod.Fixed)
         {
             var source = db.Transactions.AsNoTracking()
-                .Where(entry => entry.TenantId == tenantId && entry.PaymentMethod != PaymentMethod.Fixed);
+                .Where(entry => entry.TenantId == tenantId
+                    && entry.PaymentMethod != PaymentMethod.Fixed
+                    && !entry.IsFixed);
             if (query.From is DateOnly from && query.To is DateOnly to)
                 source = source.Where(entry => entry.LocalDate >= from && entry.LocalDate <= to);
             if (methodFilter is PaymentMethod method)
@@ -39,10 +41,13 @@ public sealed class SummaryService(PayBotDbContext db)
                 .ToListAsync(cancellationToken));
         }
 
-        if (methodFilter is null or PaymentMethod.Fixed && query.CardId is null)
-        {
-            rows.AddRange(await ExpandFixedAsync(tenantId, query.From, query.To, cancellationToken));
-        }
+        rows.AddRange(await ExpandFixedAsync(
+            tenantId,
+            query.From,
+            query.To,
+            methodFilter,
+            query.CardId,
+            cancellationToken));
 
         var report = SummaryAggregator.Build(query.Title, rows, expensesOnly);
         if (expensesOnly || query.From is not DateOnly openingFrom)
@@ -60,6 +65,7 @@ public sealed class SummaryService(PayBotDbContext db)
         var rows = await db.Transactions.AsNoTracking()
             .Where(entry => entry.TenantId == tenantId
                 && entry.PaymentMethod != PaymentMethod.Fixed
+                && !entry.IsFixed
                 && entry.LocalDate >= start
                 && entry.LocalDate <= end)
             .Select(entry => new { entry.Direction, entry.Amount })
@@ -76,6 +82,7 @@ public sealed class SummaryService(PayBotDbContext db)
         var rows = await db.Transactions.AsNoTracking()
             .Where(entry => entry.TenantId == tenantId
                 && entry.PaymentMethod != PaymentMethod.Fixed
+                && !entry.IsFixed
                 && entry.LocalDate < before)
             .Select(entry => new { entry.Direction, entry.Amount })
             .ToListAsync(cancellationToken);
@@ -95,7 +102,7 @@ public sealed class SummaryService(PayBotDbContext db)
         DateOnly to,
         CancellationToken cancellationToken)
     {
-        var expanded = await ExpandFixedAsync(tenantId, from, to, cancellationToken);
+        var expanded = await ExpandFixedAsync(tenantId, from, to, null, null, cancellationToken);
         return expanded.Sum(row => row.Amount);
     }
 
@@ -103,13 +110,22 @@ public sealed class SummaryService(PayBotDbContext db)
         Guid tenantId,
         DateOnly? from,
         DateOnly? to,
+        PaymentMethod? methodFilter,
+        Guid? cardId,
         CancellationToken cancellationToken)
     {
         var today = SaoPauloClock.Today();
         var currentMonth = FixedExpenseSchedule.FirstOfMonth(today);
-        var expenses = await db.FixedExpenses.AsNoTracking()
-            .Where(entry => entry.TenantId == tenantId)
-            .ToListAsync(cancellationToken);
+        var query = db.FixedExpenses.AsNoTracking()
+            .Include(entry => entry.Card)
+            .Where(entry => entry.TenantId == tenantId);
+
+        if (methodFilter is PaymentMethod method)
+            query = query.Where(entry => entry.Method == method);
+        if (cardId is Guid id)
+            query = query.Where(entry => entry.CardId == id);
+
+        var expenses = await query.ToListAsync(cancellationToken);
 
         DateOnly rangeFrom;
         DateOnly rangeTo;
@@ -135,6 +151,7 @@ public sealed class SummaryService(PayBotDbContext db)
         var rows = new List<SummaryRow>();
         foreach (var expense in expenses)
         {
+            var isCardFixed = expense.Method is PaymentMethod.CreditCard or PaymentMethod.DebitCard;
             foreach (var month in FixedExpenseSchedule.MonthsInRange(
                          expense.StartMonth,
                          expense.EndMonth,
@@ -145,11 +162,11 @@ public sealed class SummaryService(PayBotDbContext db)
                     month,
                     Direction.Expense,
                     expense.Amount,
-                    PaymentMethod.Fixed,
+                    expense.Method,
                     expense.Description,
+                    expense.Card?.Name,
                     null,
-                    null,
-                    false,
+                    isCardFixed,
                     expense.CreatedAt));
             }
         }
