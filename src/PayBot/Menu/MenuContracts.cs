@@ -30,7 +30,8 @@ public sealed record SummaryQuery(
     DateOnly? To,
     string Title,
     PaymentMethod? Method = null,
-    Guid? CardId = null);
+    Guid? CardId = null,
+    bool Compact = false);
 
 public sealed record AdminTenant(Guid Id, string Name);
 

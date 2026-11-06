@@ -18,6 +18,20 @@ public static class SummaryPdf
             lines.Add($"Saldo: {MenuTexts.Money(report.Balance)}");
         }
 
+        if (report.Compact)
+        {
+            var compact = SummaryFormatter.CompactExpenseLines(report);
+            if (compact.Count > 0)
+            {
+                lines.Add("");
+                lines.Add("Saidas");
+                foreach (var line in compact)
+                    lines.Add($"- {line.Label}: {MenuTexts.Money(line.Amount)}");
+            }
+
+            return SimplePdf.Create(lines);
+        }
+
         if (report.Expenses.Count > 0)
         {
             lines.Add("");

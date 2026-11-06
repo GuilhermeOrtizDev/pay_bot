@@ -49,7 +49,7 @@ public sealed class SummaryService(PayBotDbContext db)
             query.CardId,
             cancellationToken));
 
-        var report = SummaryAggregator.Build(query.Title, rows, expensesOnly);
+        var report = SummaryAggregator.Build(query.Title, rows, expensesOnly) with { Compact = query.Compact };
         if (expensesOnly || query.From is not DateOnly openingFrom)
             return report;
 

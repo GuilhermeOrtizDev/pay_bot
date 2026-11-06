@@ -239,6 +239,54 @@ public class SummaryTests
         Assert.Equal(2, Assert.Single(every.Methods).Cards.Count);
     }
 
+    [Fact]
+    public async Task Compact_summary_shows_only_method_and_card_totals()
+    {
+        await using var db = await TestDb.CreateAsync();
+        var black = Card(CardKind.Credit, "Black");
+        var platinum = Card(CardKind.Credit, "Platinum");
+        db.Cards.AddRange(black, platinum);
+        db.Transactions.Add(Income(new DateOnly(2026, 10, 2), 3000, "salario"));
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 3), 50, PaymentMethod.Pix, description: "padaria"));
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 4), 200, PaymentMethod.CreditCard, black));
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 5), 100, PaymentMethod.CreditCard, black));
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 6), 70, PaymentMethod.CreditCard, platinum));
+        await db.SaveChangesAsync();
+
+        var report = await new SummaryService(db).BuildAsync(
+            TestDb.Tenant,
+            new SummaryQuery(
+                new DateOnly(2026, 10, 1),
+                new DateOnly(2026, 10, 31),
+                "Resumo de 01/10/2026 a 31/10/2026",
+                Compact: true),
+            CancellationToken.None);
+
+        Assert.True(report.Compact);
+        Assert.Equal(
+            """
+            Resumo de 01/10/2026 a 31/10/2026
+            Entradas: R$ 3.000,00
+            Saidas: R$ 420,00
+            Saldo anterior: R$ 0,00
+            Saldo: R$ 2.580,00
+
+            Saidas
+            - Pix: R$ 50,00
+            - Cartao credito Black: R$ 300,00
+            - Cartao credito Platinum: R$ 70,00
+            """.Replace("\r\n", "\n"),
+            SummaryFormatter.Format(report).Replace("\r\n", "\n"));
+
+        var pdf = System.Text.Encoding.ASCII.GetString(SummaryPdf.Render(report));
+        Assert.Contains("Cartao credito Black: R$ 300,00", pdf);
+        Assert.Contains("Cartao credito Platinum: R$ 70,00", pdf);
+        Assert.Contains("Pix: R$ 50,00", pdf);
+        Assert.DoesNotContain("padaria", pdf);
+        Assert.DoesNotContain("salario", pdf);
+        Assert.DoesNotContain("03/10/2026", pdf);
+    }
+
     private static async Task<string> FormatAsync(PayBotDbContext db, DateOnly from, DateOnly to, string title)
     {
         var report = await new SummaryService(db).BuildAsync(TestDb.Tenant, new SummaryQuery(from, to, title), CancellationToken.None);
