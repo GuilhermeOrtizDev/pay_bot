@@ -206,6 +206,10 @@ public static class AiEngine
 
     private static bool IsFixedRemove(AiIntent intent)
     {
+        if (intent.Fields.TryGetValue("cobranca", out var billing)
+            && BulkEntry.Fold(billing) is "fixo")
+            return true;
+
         if (!intent.Fields.TryGetValue("tipo", out var tipo))
             return false;
         var folded = BulkEntry.Fold(tipo);

@@ -59,15 +59,14 @@ public sealed class OpenAiClient(
 
         campos (gasto, entrada e remover despesa fixa; nos outros casos, todos null):
         - Preencha apenas o que a mensagem ou o rascunho informam. Nunca invente valor, cartao, parcelas ou descricao. Use null para o que nao souber.
-        - tipo (gasto ou remover): exatamente um de: pix, cartao credito, cartao debito, retirada, despesa fixa, outros. "credito" = cartao credito; "debito" = cartao debito; saque ou dinheiro retirado do caixa = retirada; conta mensal sem cartao (aluguel, condominio, internet) = despesa fixa; dinheiro, boleto ou outra forma = outros. Em entrada, tipo e null. Em remover, use tipo despesa fixa so quando o usuario pedir para encerrar/apagar uma despesa fixa; nos outros removimentos, tipo null.
-
-        - cobranca (so cartao credito ou cartao debito): exatamente um de: parcelas, a vista, fixo. Assinatura ou cobranca mensal recorrente no cartao = fixo. Cartao debito nunca e parcelas. Em outros tipos, null.
+        - tipo (gasto ou remover): exatamente um de: pix, cartao credito, cartao debito, retirada, despesa fixa, outros. "credito" = cartao credito; "debito" = cartao debito; saque ou dinheiro retirado do caixa = retirada; conta mensal sem cartao (aluguel, condominio, internet) = despesa fixa; dinheiro, boleto ou outra forma = outros. Em entrada, tipo e null. Em remover, use tipo despesa fixa quando for encerrar despesa fixa sem cartao; use tipo cartao credito/debito + cobranca fixo para encerrar assinatura no cartao; nos outros removimentos, tipo null.
+        - cobranca (so cartao credito ou cartao debito, inclusive em remover): exatamente um de: parcelas, a vista, fixo. Assinatura ou cobranca mensal recorrente no cartao = fixo. Cartao debito nunca e parcelas. Em outros tipos, null.
         - parcelas: numero inteiro, so quando cobranca = parcelas.
         - valor: o valor que o usuario disse, no formato 1234,56. Nao converta valor de parcela em total nem o contrario.
         - valor_tipo: exatamente um de: parcela, total. So quando cobranca = parcelas; nos outros casos, null. "10x de 120" ou "parcela de 120" = parcela. "1200 em 10x" ou valor total = total. Nao divida nem multiplique o valor. Se nao der para saber, null.
         - cartao: nome do cartao. Se corresponder a um cartao da lista, use o nome exato da lista.
         - descricao: curta, em minusculas, ex: mercado, uber, salario, notebook.
-        - mes: MM/yyyy do mes de cobranca. Use so em cartao credito, despesa fixa, outros e entrada. Se o usuario nao disser o mes, use o mes de hoje; "proximo mes" = mes seguinte. Em pix, retirada e cartao debito, null.
+        - mes: MM/yyyy do mes de cobranca. Use em cartao credito, cartao debito com cobranca fixo, despesa fixa, outros e entrada. Se o usuario nao disser o mes, use o mes de hoje; "proximo mes" = mes seguinte. Em pix, retirada e cartao debito a vista, null.
 
         Rascunho: se houver um rascunho, a mensagem provavelmente completa ou corrige esse lancamento. Mantenha a mesma acao e devolva os campos novos ou corrigidos. Se a mensagem claramente pede outra coisa (resumo, remover, outro lancamento), siga a mensagem.
 

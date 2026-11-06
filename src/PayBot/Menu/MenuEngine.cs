@@ -302,7 +302,7 @@ public static class MenuEngine
             return Stay(MenuStep.AwaitingExpenseDescription, draft, MenuTexts.InvalidDescription);
 
         draft.Description = description;
-        if (NeedsChargeMonth(draft.Method))
+        if (NeedsChargeMonth(draft))
             return Stay(MenuStep.AwaitingChargeMonth, draft, MenuTexts.AskChargeMonth);
 
         return FinishExpense(draft);
@@ -319,8 +319,9 @@ public static class MenuEngine
         return FinishExpense(draft);
     }
 
-    private static bool NeedsChargeMonth(PaymentMethod? method) =>
-        method is PaymentMethod.CreditCard or PaymentMethod.Fixed or PaymentMethod.Other;
+    private static bool NeedsChargeMonth(SessionDraft draft) =>
+        draft.Method is PaymentMethod.CreditCard or PaymentMethod.Fixed or PaymentMethod.Other
+        || (draft.Method == PaymentMethod.DebitCard && draft.Billing == CardBilling.Fixed);
 
     private static bool TryParseMonth(string text, out DateOnly month) =>
         DateRangeParser.TryParseMonth(text, out month);

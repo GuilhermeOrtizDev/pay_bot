@@ -68,7 +68,12 @@ public sealed class PayBotDbContext(DbContextOptions<PayBotDbContext> options) :
                 .WithMany()
                 .HasForeignKey(x => x.TenantId)
                 .OnDelete(DeleteBehavior.Restrict);
+            entry.HasOne(x => x.Card)
+                .WithMany()
+                .HasForeignKey(x => x.CardId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
+
 
 
         modelBuilder.Entity<Card>(entry =>
