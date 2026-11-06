@@ -324,20 +324,28 @@ public class MenuEngineTests
     public void Summary_options_cover_month_year_total_and_custom_range()
     {
         var all = Act("1", MenuStep.SummaryMenu);
-        Assert.Equal(MenuStep.AwaitingSummaryPeriod, all.NextStep);
-        Assert.Contains("2 - Resumo do proximo mes", all.Reply);
-        Assert.Contains("5 - Filtrar data", all.Reply);
+        Assert.Equal(MenuStep.AwaitingSummaryDetail, all.NextStep);
+        Assert.Contains("1 - Detalhado", all.Reply);
+        Assert.Contains("2 - Resumido", all.Reply);
         Assert.Null(all.Draft.SummaryMethod);
 
-        var month = Act("1", MenuStep.AwaitingSummaryPeriod);
+        var detailed = Act("1", all.NextStep, all.Draft);
+        Assert.Equal(MenuStep.AwaitingSummaryPeriod, detailed.NextStep);
+        Assert.False(detailed.Draft.SummaryCompact);
+        Assert.Contains("2 - Resumo do proximo mes", detailed.Reply);
+        Assert.Contains("5 - Filtrar data", detailed.Reply);
+
+        var month = Act("1", detailed.NextStep, detailed.Draft);
         Assert.Equal(MenuStep.AwaitingSummaryOutput, month.NextStep);
         Assert.Contains("1 - Gerar em PDF", month.Reply);
         Assert.Contains("2 - Gerar em texto", month.Reply);
         Assert.Equal(new DateOnly(2026, 10, 1), month.Draft.SummaryFrom);
         Assert.Equal(new DateOnly(2026, 10, 31), month.Draft.SummaryTo);
+        Assert.False(month.Draft.SummaryCompact);
 
         var asText = Act("2", month.NextStep, month.Draft);
         Assert.False(asText.AsPdf);
+        Assert.False(asText.Summary!.Compact);
         Assert.Equal(new DateOnly(2026, 10, 1), asText.Summary!.From);
         Assert.Equal(new DateOnly(2026, 10, 31), asText.Summary.To);
         Assert.Equal(MenuStep.SummaryMenu, asText.NextStep);
@@ -347,6 +355,14 @@ public class MenuEngineTests
         Assert.Equal(month.Draft.SummaryTitle, asPdf.Summary!.Title);
         Assert.Null(asPdf.Summary.Method);
         Assert.Null(asPdf.Summary.CardId);
+        Assert.False(asPdf.Summary.Compact);
+
+        var compact = Act("2", MenuStep.AwaitingSummaryDetail);
+        Assert.Equal(MenuStep.AwaitingSummaryPeriod, compact.NextStep);
+        Assert.True(compact.Draft.SummaryCompact);
+        var compactMonth = Act("1", compact.NextStep, compact.Draft);
+        var compactText = Act("2", compactMonth.NextStep, compactMonth.Draft);
+        Assert.True(compactText.Summary!.Compact);
 
         var nextMonth = Act("2", MenuStep.AwaitingSummaryPeriod);
         Assert.Equal(new DateOnly(2026, 11, 1), nextMonth.Draft.SummaryFrom);

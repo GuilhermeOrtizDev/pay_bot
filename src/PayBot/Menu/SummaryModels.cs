@@ -38,7 +38,8 @@ public sealed record SummaryReport(
     IReadOnlyList<ExpenseLine> Expenses,
     bool ExpensesOnly = false,
     decimal OpeningBalance = 0,
-    bool ShowOpeningBalance = false)
+    bool ShowOpeningBalance = false,
+    bool Compact = false)
 {
     public decimal Balance => OpeningBalance + IncomeTotal - ExpenseTotal;
 }

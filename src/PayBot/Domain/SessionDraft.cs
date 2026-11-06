@@ -20,6 +20,7 @@ public sealed class SessionDraft
     public PaymentMethod? SummaryMethod { get; set; }
     public Guid? SummaryCardId { get; set; }
     public string? SummaryCardName { get; set; }
+    public bool SummaryCompact { get; set; }
     public string? Description { get; set; }
     public DateOnly? ChargeMonth { get; set; }
     public bool IsBulkIncome { get; set; }
@@ -45,6 +46,7 @@ public sealed class SessionDraft
         SummaryMethod = SummaryMethod,
         SummaryCardId = SummaryCardId,
         SummaryCardName = SummaryCardName,
+        SummaryCompact = SummaryCompact,
         Description = Description,
         ChargeMonth = ChargeMonth,
         IsBulkIncome = IsBulkIncome,

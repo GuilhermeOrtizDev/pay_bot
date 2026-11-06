@@ -57,6 +57,7 @@ public static class MenuEngine
             MenuStep.ExampleMenu => OnExamples(text, cards),
             MenuStep.SummaryMenu => OnSummaryFilter(text, cards),
             MenuStep.AwaitingSummaryCard => OnSummaryCard(text, draft, cards),
+            MenuStep.AwaitingSummaryDetail => OnSummaryDetail(text, draft),
             MenuStep.AwaitingSummaryPeriod => OnSummaryPeriod(text, draft, today),
             MenuStep.AwaitingSummaryOutput => OnSummaryOutput(text, draft),
             MenuStep.AwaitingDateRange => OnDateRange(text, draft),
@@ -378,7 +379,7 @@ public static class MenuEngine
     private static MenuTurn OnSummaryFilter(string text, IReadOnlyList<KnownCard> cards)
     {
         if (text == "1")
-            return AskPeriod(new SessionDraft());
+            return Stay(MenuStep.AwaitingSummaryDetail, new SessionDraft(), MenuTexts.SummaryDetail);
 
         var method = text switch
         {
@@ -398,6 +399,15 @@ public static class MenuEngine
         if (list.Count == 0)
             return AskPeriod(draft);
         return Stay(MenuStep.AwaitingSummaryCard, draft, MenuTexts.SummaryCardList(list));
+    }
+
+    private static MenuTurn OnSummaryDetail(string text, SessionDraft draft)
+    {
+        if (text is not ("1" or "2"))
+            return Stay(MenuStep.AwaitingSummaryDetail, draft, MenuTexts.SummaryDetail);
+
+        draft.SummaryCompact = text == "2";
+        return AskPeriod(draft);
     }
 
     private static MenuTurn OnSummaryCard(string text, SessionDraft draft, IReadOnlyList<KnownCard> cards)
@@ -606,7 +616,8 @@ public static class MenuEngine
             SummaryTitle = FilteredTitle(title, filter),
             SummaryMethod = filter.SummaryMethod,
             SummaryCardId = filter.SummaryCardId,
-            SummaryCardName = filter.SummaryCardName
+            SummaryCardName = filter.SummaryCardName,
+            SummaryCompact = filter.SummaryCompact
         };
         return Stay(MenuStep.AwaitingSummaryOutput, draft, MenuTexts.SummaryOutput);
     }
@@ -623,7 +634,13 @@ public static class MenuEngine
     {
         if (string.IsNullOrWhiteSpace(draft.SummaryTitle))
             return null;
-        return new SummaryQuery(draft.SummaryFrom, draft.SummaryTo, draft.SummaryTitle, draft.SummaryMethod, draft.SummaryCardId);
+        return new SummaryQuery(
+            draft.SummaryFrom,
+            draft.SummaryTo,
+            draft.SummaryTitle,
+            draft.SummaryMethod,
+            draft.SummaryCardId,
+            draft.SummaryCompact);
     }
 
     private static MenuTurn CardPrompt(SessionDraft draft, IReadOnlyList<KnownCard> cards)

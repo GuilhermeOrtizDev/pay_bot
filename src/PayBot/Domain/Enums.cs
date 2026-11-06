@@ -75,6 +75,7 @@ public enum MenuStep
     AwaitingDeleteScope = 35,
     AwaitingFixedDeleteChoice = 36,
     AwaitingFixedEndMonth = 37,
-    AiAwaitingFixedEndMonth = 38
+    AiAwaitingFixedEndMonth = 38,
+    AwaitingSummaryDetail = 39
 }
 

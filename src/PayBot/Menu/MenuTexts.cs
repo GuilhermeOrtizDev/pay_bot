@@ -108,6 +108,13 @@ public static class MenuTexts
         7 - Outros
         """;
 
+    public const string SummaryDetail = """
+        Tipo do resumo
+        0 - Voltar Menu Inicial
+        1 - Detalhado
+        2 - Resumido
+        """;
+
     public const string SummaryPeriod = """
         Periodo do resumo
         0 - Voltar Menu Inicial
