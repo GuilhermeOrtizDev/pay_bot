@@ -287,7 +287,8 @@ public static class MenuEngine
         if (name.Length is 0 or > 80)
             return Stay(MenuStep.AwaitingNewCardName, draft, MenuTexts.InvalidCardName);
 
-        var existing = list.FirstOrDefault(card => string.Equals(card.Name, name, StringComparison.OrdinalIgnoreCase));
+        var folded = BulkEntry.Fold(name);
+        var existing = list.FirstOrDefault(card => BulkEntry.Fold(card.Name) == folded);
         if (existing is not null)
             return RememberCard(draft, existing.Id, existing.Name, false);
 

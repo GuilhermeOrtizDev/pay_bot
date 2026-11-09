@@ -284,6 +284,23 @@ public class MenuEngineTests
     }
 
     [Fact]
+    public void New_card_name_ignores_accents_and_case()
+    {
+        var blackId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var cards = new List<KnownCard>(Cards())
+        {
+            new(blackId, "Cartão Black", CardKind.Credit)
+        };
+        var draft = new SessionDraft { Method = PaymentMethod.CreditCard, Amount = 20, Billing = CardBilling.InFull };
+        var named = Act("cartao black", MenuStep.AwaitingNewCardName, draft, cards);
+
+        Assert.Equal(MenuStep.AwaitingExpenseDescription, named.NextStep);
+        Assert.False(named.Draft.CreateCard);
+        Assert.Equal(blackId, named.Draft.CardId);
+        Assert.Equal("Cartão Black", named.Draft.CardName);
+    }
+
+    [Fact]
     public void Debit_list_hides_credit_cards()
     {
         var draft = new SessionDraft { Method = PaymentMethod.DebitCard, Amount = 10 };
@@ -785,6 +802,30 @@ public class MenuEngineTests
         Assert.False(saved.Expense.IsFixed);
         Assert.Equal(new DateOnly(2026, 10, 1), saved.Expense.ChargeMonth);
         Assert.Contains("a vista", saved.Reply);
+    }
+
+    [Fact]
+    public void Bulk_card_name_ignores_accents_and_case()
+    {
+        var blackId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var cards = new List<KnownCard>(Cards())
+        {
+            new(blackId, "Cartão Black", CardKind.Credit)
+        };
+
+        var saved = Act("""
+            gasto
+            tipo: cartao credito
+            cobranca: a vista
+            valor: 50
+            cartao: CARTAO BLACK
+            descricao: mercado
+            mes: 10/2026
+            """, MenuStep.Main, cards: cards);
+
+        Assert.False(saved.Expense!.CreateCard);
+        Assert.Equal(blackId, saved.Expense.CardId);
+        Assert.Equal("Cartão Black", saved.Expense.CardName);
     }
 
     [Fact]

@@ -413,10 +413,14 @@ public sealed class InboundProcessor(
             var kind = expense.Method == PaymentMethod.CreditCard ? CardKind.Credit : CardKind.Debit;
             if (expense.CreateCard && !string.IsNullOrWhiteSpace(expense.CardName))
             {
-                var normalized = Normalize(expense.CardName);
-                var card = await db.Cards.FirstOrDefaultAsync(
-                    item => item.TenantId == tenantId && item.Kind == kind && item.NormalizedName == normalized,
-                    cancellationToken);
+                var normalized = BulkEntry.Fold(expense.CardName);
+                var cards = await db.Cards
+                    .Where(item => item.TenantId == tenantId && item.Kind == kind)
+                    .ToListAsync(cancellationToken);
+                var card = cards.FirstOrDefault(item =>
+                    item.NormalizedName == normalized
+                    || BulkEntry.Fold(item.NormalizedName) == normalized
+                    || BulkEntry.Fold(item.Name) == normalized);
                 if (card is null)
                 {
                     card = new Card
@@ -432,7 +436,12 @@ public sealed class InboundProcessor(
                     db.Cards.Add(card);
                 }
                 else
+                {
                     card.LastUsedAt = now;
+                    if (card.NormalizedName != normalized
+                        && cards.All(other => other.Id == card.Id || other.NormalizedName != normalized))
+                        card.NormalizedName = normalized;
+                }
 
                 cardId = card.Id;
             }
