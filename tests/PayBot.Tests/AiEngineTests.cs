@@ -94,6 +94,28 @@ public class AiEngineTests
     }
 
     [Fact]
+    public void Card_name_from_ai_ignores_accents_and_case()
+    {
+        var blackId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var cards = new List<KnownCard>(Cards())
+        {
+            new(blackId, "Cartão Black", CardKind.Credit)
+        };
+
+        var pending = Interpret(
+            Expense(("tipo", "cartao credito"), ("cobranca", "a vista"), ("valor", "50"), ("cartao", "Cartao black"), ("descricao", "mercado"), ("mes", "10/2026")),
+            MenuStep.AiMode,
+            new SessionDraft());
+        Assert.Equal(MenuStep.AiAwaitingConfirm, pending.NextStep);
+
+        var saved = AiEngine.Direct("Sim", pending.NextStep, pending.Draft, cards);
+        Assert.NotNull(saved?.Expense);
+        Assert.False(saved.Expense.CreateCard);
+        Assert.Equal(blackId, saved.Expense.CardId);
+        Assert.Equal("Cartão Black", saved.Expense.CardName);
+    }
+
+    [Fact]
     public void Installments_without_amount_kind_are_asked()
     {
         var pending = Interpret(

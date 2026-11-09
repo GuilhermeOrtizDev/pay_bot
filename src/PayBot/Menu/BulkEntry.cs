@@ -177,8 +177,9 @@ public static class BulkEntry
         }
 
         var kind = draft.Method == PaymentMethod.CreditCard ? CardKind.Credit : CardKind.Debit;
+        var folded = Fold(name);
         var existing = cards.FirstOrDefault(card =>
-            card.Kind == kind && string.Equals(card.Name, name, StringComparison.OrdinalIgnoreCase));
+            card.Kind == kind && Fold(card.Name) == folded);
         if (existing is null)
         {
             draft.CardId = null;

@@ -298,7 +298,7 @@ public class SummaryTests
         Id = Guid.NewGuid(),
         TenantId = TestDb.Tenant,
         Name = name,
-        NormalizedName = name.ToLowerInvariant(),
+        NormalizedName = BulkEntry.Fold(name),
         Kind = kind,
         CreatedAt = DateTimeOffset.UnixEpoch,
         LastUsedAt = DateTimeOffset.UnixEpoch
