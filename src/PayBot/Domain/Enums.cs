@@ -76,6 +76,9 @@ public enum MenuStep
     AwaitingFixedDeleteChoice = 36,
     AwaitingFixedEndMonth = 37,
     AiAwaitingFixedEndMonth = 38,
-    AwaitingSummaryDetail = 39
+    AwaitingSummaryDetail = 39,
+    AwaitingCardDeleteKind = 40,
+    AwaitingCardDeleteChoice = 41,
+    AwaitingCardDeleteConfirm = 42
 }
 

@@ -609,6 +609,69 @@ public class SummaryTests
     }
 
     [Fact]
+    public async Task Card_delete_without_records_removes_the_card()
+    {
+        await using var db = await TestDb.CreateAsync();
+        var card = Card(CardKind.Credit, "Nubank");
+        db.Cards.Add(card);
+        await db.SaveChangesAsync();
+
+        var result = await PayBot.Webhooks.InboundProcessor.ApplyCardDeleteAsync(
+            db,
+            TestDb.Tenant,
+            new PendingCardDelete(card.Id, false),
+            CancellationToken.None);
+        await db.SaveChangesAsync();
+
+        Assert.Equal(MenuStep.RemoveMenu, result.NextStep);
+        Assert.StartsWith("Cartao removido", result.Reply);
+        Assert.Empty(db.Cards.Where(item => item.Id == card.Id));
+    }
+
+    [Fact]
+    public async Task Card_delete_with_records_asks_before_cascade()
+    {
+        await using var db = await TestDb.CreateAsync();
+        var card = Card(CardKind.Credit, "Nubank");
+        db.Cards.Add(card);
+        db.Transactions.Add(Expense(new DateOnly(2026, 10, 5), 100, PaymentMethod.CreditCard, card, description: "mercado"));
+        db.FixedExpenses.Add(Fixed(
+            new DateOnly(2026, 9, 1),
+            80,
+            "netflix",
+            method: PaymentMethod.CreditCard,
+            card: card));
+        await db.SaveChangesAsync();
+
+        var ask = await PayBot.Webhooks.InboundProcessor.ApplyCardDeleteAsync(
+            db,
+            TestDb.Tenant,
+            new PendingCardDelete(card.Id, false),
+            CancellationToken.None);
+        await db.SaveChangesAsync();
+
+        Assert.Equal(MenuStep.AwaitingCardDeleteConfirm, ask.NextStep);
+        Assert.Equal(card.Id, ask.Draft.CardId);
+        Assert.Contains("Este cartao tem registros vinculados", ask.Reply);
+        Assert.Single(db.Cards.Where(item => item.Id == card.Id));
+        Assert.Equal(1, db.Transactions.Count(item => item.CardId == card.Id));
+        Assert.Equal(1, db.FixedExpenses.Count(item => item.CardId == card.Id));
+
+        var removed = await PayBot.Webhooks.InboundProcessor.ApplyCardDeleteAsync(
+            db,
+            TestDb.Tenant,
+            new PendingCardDelete(card.Id, true),
+            CancellationToken.None);
+        await db.SaveChangesAsync();
+
+        Assert.Equal(MenuStep.RemoveMenu, removed.NextStep);
+        Assert.StartsWith("Cartao removido", removed.Reply);
+        Assert.Empty(db.Cards.Where(item => item.Id == card.Id));
+        Assert.Empty(db.Transactions.Where(item => item.CardId == card.Id));
+        Assert.Empty(db.FixedExpenses.Where(item => item.CardId == card.Id));
+    }
+
+    [Fact]
     public async Task Card_fixed_expense_expands_and_respects_filters()
     {
         await using var db = await TestDb.CreateAsync();

@@ -146,8 +146,25 @@ public static class MenuTexts
         1 - Entrada
         2 - Saida
         3 - Despesa Fixa
+        4 - Cartao
         """;
 
+    public const string RemoveCardKind = """
+        Remover cartao
+        0 - Voltar Menu Inicial
+        1 - Cartao credito
+        2 - Cartao debito
+        """;
+
+    public const string CardHasRecords = """
+        Este cartao tem registros vinculados.
+        0 - Voltar Menu Inicial
+        1 - Apagar os gastos e remover o cartao
+        2 - Cancelar operacao
+        """;
+
+    public const string CardRemoved = "Cartao removido.";
+    public const string CardDeleteCancelled = "Operacao cancelada. Nada foi alterado.";
 
     public const string RemoveScope = """
         Remover
@@ -275,6 +292,21 @@ public static class MenuTexts
         for (var i = 0; i < cards.Count; i++)
             builder.AppendLine($"{i + 1} - {cards[i].Name}");
         builder.Append("99 - Registrar novo cartao");
+        return builder.ToString();
+    }
+
+    public static string RemoveCardList(IReadOnlyList<KnownCard> cards)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("Escolha o cartao");
+        builder.AppendLine("0 - Voltar Menu Inicial");
+        for (var i = 0; i < cards.Count; i++)
+        {
+            if (i > 0)
+                builder.AppendLine();
+            builder.Append($"{i + 1} - {cards[i].Name}");
+        }
+
         return builder.ToString();
     }
 
