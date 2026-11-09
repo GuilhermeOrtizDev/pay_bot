@@ -31,6 +31,7 @@ public class MenuEngineTests
         Assert.Equal(MenuStep.RemoveMenu, remove.NextStep);
         Assert.Contains("1 - Entrada", remove.Reply);
         Assert.Contains("2 - Saida", remove.Reply);
+        Assert.Contains("4 - Cartao", remove.Reply);
 
         var paused = Act("5", MenuStep.Main);
         Assert.Equal(MenuStep.Paused, paused.NextStep);
@@ -498,6 +499,72 @@ public class MenuEngineTests
         Assert.Equal(MenuStep.AwaitingFixedEndMonth, invalid.NextStep);
         Assert.Null(invalid.CloseFixed);
         Assert.Contains("Mes final invalido", invalid.Reply);
+    }
+
+    [Fact]
+    public void Remove_card_lists_by_kind_and_requests_delete()
+    {
+        var kind = Act("4", MenuStep.RemoveMenu);
+        Assert.Equal(MenuStep.AwaitingCardDeleteKind, kind.NextStep);
+        Assert.Contains("1 - Cartao credito", kind.Reply);
+        Assert.Contains("2 - Cartao debito", kind.Reply);
+
+        var empty = Act("1", MenuStep.AwaitingCardDeleteKind);
+        Assert.Equal(MenuStep.RemoveMenu, empty.NextStep);
+        Assert.Contains("Nenhum registro", empty.Reply);
+        Assert.Null(empty.CardDelete);
+
+        var credit = Act("1", MenuStep.AwaitingCardDeleteKind, cards: Cards());
+        Assert.Equal(MenuStep.AwaitingCardDeleteChoice, credit.NextStep);
+        Assert.Equal(CardKind.Credit, credit.Draft.DeleteCardKind);
+        Assert.Contains("1 - Nubank", credit.Reply);
+        Assert.DoesNotContain("Inter", credit.Reply);
+        Assert.DoesNotContain("99 -", credit.Reply);
+
+        var debit = Act("2", MenuStep.AwaitingCardDeleteKind, cards: Cards());
+        Assert.Equal(CardKind.Debit, debit.Draft.DeleteCardKind);
+        Assert.Contains("1 - Inter", debit.Reply);
+        Assert.DoesNotContain("Nubank", debit.Reply);
+
+        var chosen = Act("1", credit.NextStep, credit.Draft, Cards());
+        Assert.Equal(MenuStep.RemoveMenu, chosen.NextStep);
+        Assert.NotNull(chosen.CardDelete);
+        Assert.Equal(NubankId, chosen.CardDelete.CardId);
+        Assert.False(chosen.CardDelete.DeleteLinkedRecords);
+        Assert.Equal(NubankId, chosen.Draft.CardId);
+
+        var invalid = Act("9", credit.NextStep, credit.Draft, Cards());
+        Assert.Null(invalid.CardDelete);
+        Assert.Equal(MenuStep.AwaitingCardDeleteChoice, invalid.NextStep);
+        Assert.Contains("1 - Nubank", invalid.Reply);
+    }
+
+    [Fact]
+    public void Remove_card_confirm_deletes_with_records_or_cancels()
+    {
+        var draft = new SessionDraft
+        {
+            CardId = NubankId,
+            CardName = "Nubank",
+            DeleteCardKind = CardKind.Credit
+        };
+
+        var confirm = Act("1", MenuStep.AwaitingCardDeleteConfirm, draft);
+        Assert.NotNull(confirm.CardDelete);
+        Assert.Equal(NubankId, confirm.CardDelete.CardId);
+        Assert.True(confirm.CardDelete.DeleteLinkedRecords);
+        Assert.Equal(MenuStep.RemoveMenu, confirm.NextStep);
+
+        var cancel = Act("2", MenuStep.AwaitingCardDeleteConfirm, draft);
+        Assert.Null(cancel.CardDelete);
+        Assert.Equal(MenuStep.RemoveMenu, cancel.NextStep);
+        Assert.Contains("Operacao cancelada", cancel.Reply);
+        Assert.Contains("1 - Entrada", cancel.Reply);
+
+        var invalid = Act("9", MenuStep.AwaitingCardDeleteConfirm, draft);
+        Assert.Null(invalid.CardDelete);
+        Assert.Equal(MenuStep.AwaitingCardDeleteConfirm, invalid.NextStep);
+        Assert.Contains("Este cartao tem registros vinculados", invalid.Reply);
     }
 
     [Fact]

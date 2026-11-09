@@ -252,6 +252,14 @@ public sealed class InboundProcessor(
             }
         }
 
+        if (turn.CardDelete is { } cardDelete)
+        {
+            var applied = await ApplyCardDeleteAsync(db, tenant, cardDelete, cancellationToken);
+            reply = applied.Reply;
+            nextStep = applied.NextStep;
+            draft = applied.Draft;
+        }
+
         session.Step = nextStep;
         session.DraftJson = JsonSerializer.Serialize(draft, DraftOptions);
         session.UpdatedAt = now;
@@ -586,6 +594,47 @@ public sealed class InboundProcessor(
             .ThenByDescending(entry => entry.Id)
             .Take(request.Take)
             .ToList();
+    }
+
+    internal static async Task<(string Reply, MenuStep NextStep, SessionDraft Draft)> ApplyCardDeleteAsync(
+        PayBotDbContext db,
+        Guid tenantId,
+        PendingCardDelete cardDelete,
+        CancellationToken cancellationToken)
+    {
+        var menu = "\n\n" + MenuTexts.Remove;
+        var card = await db.Cards
+            .FirstOrDefaultAsync(item => item.Id == cardDelete.CardId && item.TenantId == tenantId, cancellationToken);
+        if (card is null)
+            return (MenuTexts.RecordNotFound + menu, MenuStep.RemoveMenu, new SessionDraft());
+
+        var linkedTransactions = await db.Transactions
+            .Where(item => item.CardId == card.Id && item.TenantId == tenantId)
+            .ToListAsync(cancellationToken);
+        var linkedFixed = await db.FixedExpenses
+            .Where(item => item.CardId == card.Id && item.TenantId == tenantId)
+            .ToListAsync(cancellationToken);
+        var hasRecords = linkedTransactions.Count > 0 || linkedFixed.Count > 0;
+
+        if (hasRecords && !cardDelete.DeleteLinkedRecords)
+        {
+            return (
+                MenuTexts.CardHasRecords,
+                MenuStep.AwaitingCardDeleteConfirm,
+                new SessionDraft
+                {
+                    CardId = card.Id,
+                    CardName = card.Name,
+                    DeleteCardKind = card.Kind
+                });
+        }
+
+        if (linkedTransactions.Count > 0)
+            db.Transactions.RemoveRange(linkedTransactions);
+        if (linkedFixed.Count > 0)
+            db.FixedExpenses.RemoveRange(linkedFixed);
+        db.Cards.Remove(card);
+        return (MenuTexts.CardRemoved + menu, MenuStep.RemoveMenu, new SessionDraft());
     }
 
     private async Task<string> AppendMonthBalanceAsync(Guid tenantId, string reply, MenuTurn turn, DateTimeOffset now, CancellationToken cancellationToken)

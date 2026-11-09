@@ -67,6 +67,9 @@ public static class MenuEngine
             MenuStep.AwaitingDeleteChoice => OnDeleteChoice(text, draft),
             MenuStep.AwaitingFixedDeleteChoice => OnFixedDeleteChoice(text, draft),
             MenuStep.AwaitingFixedEndMonth => OnFixedEndMonth(text, draft),
+            MenuStep.AwaitingCardDeleteKind => OnCardDeleteKind(text, cards),
+            MenuStep.AwaitingCardDeleteChoice => OnCardDeleteChoice(text, draft, cards),
+            MenuStep.AwaitingCardDeleteConfirm => OnCardDeleteConfirm(text, draft),
             _ => OpenMain()
         };
     }
@@ -469,8 +472,91 @@ public static class MenuEngine
             null,
             null,
             FixedDeleteList: new FixedDeleteListRequest()),
+        "4" => Stay(MenuStep.AwaitingCardDeleteKind, new SessionDraft(), MenuTexts.RemoveCardKind),
         _ => Stay(MenuStep.RemoveMenu, new SessionDraft(), MenuTexts.Remove)
     };
+
+    private static MenuTurn OnCardDeleteKind(string text, IReadOnlyList<KnownCard> cards)
+    {
+        var kind = text switch
+        {
+            "1" => CardKind.Credit,
+            "2" => CardKind.Debit,
+            _ => (CardKind?)null
+        };
+        if (kind is null)
+            return Stay(MenuStep.AwaitingCardDeleteKind, new SessionDraft(), MenuTexts.RemoveCardKind);
+
+        var list = cards.Where(card => card.Kind == kind).Take(98).ToList();
+        if (list.Count == 0)
+            return Stay(MenuStep.RemoveMenu, new SessionDraft(), MenuTexts.NoRecords + "\n\n" + MenuTexts.Remove);
+
+        return Stay(
+            MenuStep.AwaitingCardDeleteChoice,
+            new SessionDraft { DeleteCardKind = kind },
+            MenuTexts.RemoveCardList(list));
+    }
+
+    private static MenuTurn OnCardDeleteChoice(string text, SessionDraft draft, IReadOnlyList<KnownCard> cards)
+    {
+        if (draft.DeleteCardKind is not CardKind kind)
+            return Stay(MenuStep.RemoveMenu, new SessionDraft(), MenuTexts.Remove);
+
+        var list = cards.Where(card => card.Kind == kind).Take(98).ToList();
+        if (list.Count == 0)
+            return Stay(MenuStep.RemoveMenu, new SessionDraft(), MenuTexts.NoRecords + "\n\n" + MenuTexts.Remove);
+
+        if (int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var index)
+            && index >= 1
+            && index <= list.Count)
+        {
+            var card = list[index - 1];
+            return new MenuTurn(
+                "",
+                MenuStep.RemoveMenu,
+                new SessionDraft { DeleteCardKind = kind, CardId = card.Id, CardName = card.Name },
+                null,
+                null,
+                null,
+                CardDelete: new PendingCardDelete(card.Id, false));
+        }
+
+        return Stay(
+            MenuStep.AwaitingCardDeleteChoice,
+            new SessionDraft { DeleteCardKind = kind },
+            MenuTexts.RemoveCardList(list));
+    }
+
+    private static MenuTurn OnCardDeleteConfirm(string text, SessionDraft draft)
+    {
+        if (draft.CardId is not Guid cardId)
+            return Stay(MenuStep.RemoveMenu, new SessionDraft(), MenuTexts.Remove);
+
+        return text switch
+        {
+            "1" => new MenuTurn(
+                "",
+                MenuStep.RemoveMenu,
+                new SessionDraft { CardId = cardId, CardName = draft.CardName, DeleteCardKind = draft.DeleteCardKind },
+                null,
+                null,
+                null,
+                CardDelete: new PendingCardDelete(cardId, true)),
+            "2" => Stay(
+                MenuStep.RemoveMenu,
+                new SessionDraft(),
+                MenuTexts.CardDeleteCancelled + "\n\n" + MenuTexts.Remove),
+            _ => Stay(
+                MenuStep.AwaitingCardDeleteConfirm,
+                new SessionDraft
+                {
+                    CardId = cardId,
+                    CardName = draft.CardName,
+                    DeleteCardKind = draft.DeleteCardKind
+                },
+                MenuTexts.CardHasRecords)
+        };
+    }
 
 
     private static MenuTurn OnDeleteScope(string text, SessionDraft draft)

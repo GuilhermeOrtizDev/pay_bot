@@ -22,6 +22,8 @@ public sealed record FixedDeleteListRequest(int Take = 30);
 
 public sealed record CloseFixedExpense(Guid Id, DateOnly EndMonth);
 
+public sealed record PendingCardDelete(Guid CardId, bool DeleteLinkedRecords);
+
 public sealed record PendingIncome(decimal Amount, string Description, DateOnly ChargeMonth);
 
 
@@ -55,5 +57,6 @@ public sealed record MenuTurn(
     bool AsPdf = false,
     AdminChange? Admin = null,
     FixedDeleteListRequest? FixedDeleteList = null,
-    CloseFixedExpense? CloseFixed = null);
+    CloseFixedExpense? CloseFixed = null,
+    PendingCardDelete? CardDelete = null);
 
